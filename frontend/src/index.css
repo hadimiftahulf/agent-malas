@@ -1,0 +1,160 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', 'Outfit', system-ui, sans-serif;
+  --font-display: 'Outfit', 'Inter', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #EAEFF5; /* Slightly darker for contrast against white content panel */
+  color: #0F172A;
+  min-height: 100vh;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* ─── Premium Card ─── */
+.premium-card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(0, 0, 0, 0.03),
+    0 0 0 1px rgba(0, 0, 0, 0.01);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.premium-card:hover {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.1);
+  transform: translateY(-2px);
+}
+
+/* ─── Stat Card Icon Badges ─── */
+.stat-icon-emerald {
+  background: linear-gradient(135deg, #D1FAE5 0%, #6EE7B7 100%);
+  color: #047857;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+.stat-icon-rose {
+  background: linear-gradient(135deg, #FFE4E6 0%, #FDA4AF 100%);
+  color: #BE123C;
+  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.2);
+}
+.stat-icon-indigo {
+  background: linear-gradient(135deg, #E0E7FF 0%, #A5B4FC 100%);
+  color: #3730A3;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+}
+.stat-icon-amber {
+  background: linear-gradient(135deg, #FEF3C7 0%, #FCD34D 100%);
+  color: #B45309;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+/* ─── Glass Panel ─── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* ─── Pulse Animation ─── */
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), 0.4); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(var(--pulse-rgb), 0); }
+  100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), 0); }
+}
+.status-dot-animated {
+  animation: pulse-ring 2s infinite;
+}
+
+/* ─── Smooth fade-in ─── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+/* ─── Shimmer Skeleton ─── */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* ─── Gradient Text Utility ─── */
+.gradient-text {
+  background: linear-gradient(135deg, #1E293B 0%, #475569 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Sidebar Active Glow ─── */
+.sidebar-active-glow {
+  box-shadow: 0 2px 12px rgba(79, 70, 229, 0.12), 0 0 0 1px rgba(79, 70, 229, 0.08);
+}
+
+/* ─── Card Accent Border ─── */
+.card-accent-emerald { border-top: 3px solid #10B981; }
+.card-accent-rose { border-top: 3px solid #F43F5E; }
+.card-accent-indigo { border-top: 3px solid #6366F1; }
+.card-accent-amber { border-top: 3px solid #F59E0B; }
+
+/* ─── Toast Slide In ─── */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Toast Progress Bar Shrink ─── */
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* ─── Micro-interactions ─── */
+button:not(:disabled) {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* ─── Stat Icon Badge Hover ─── */
+.stat-icon-emerald:hover,
+.stat-icon-rose:hover,
+.stat-icon-indigo:hover,
+.stat-icon-amber:hover {
+  transform: scale(1.08);
+  transition: transform 0.2s ease;
+}
+
