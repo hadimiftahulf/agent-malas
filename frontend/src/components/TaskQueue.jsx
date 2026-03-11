@@ -28,6 +28,7 @@ function TaskItem({ task, index, onRetry }) {
   const badge = statusBadge[task.status] || statusBadge.queued;
   const [retrying, setRetrying] = useState(false);
   const [showError, setShowError] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   const handleRetry = async () => {
     setRetrying(true);
@@ -79,6 +80,21 @@ function TaskItem({ task, index, onRetry }) {
             </button>
           )}
 
+          {task.ai_prompt && (
+            <button
+              onClick={() => setShowPrompt(!showPrompt)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all",
+                "bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 hover:border-slate-300"
+              )}
+              title="Show AI Prompt"
+            >
+              <Sparkles size={12} />
+              Prompt
+              {showPrompt ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+          )}
+
           {task.status === 'failed' && (
             <button
               onClick={handleRetry}
@@ -115,6 +131,23 @@ function TaskItem({ task, index, onRetry }) {
               <p className="text-[13px] text-rose-600 leading-relaxed whitespace-pre-wrap break-words">
                 {task.error_message}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prompt Details Panel */}
+      {task.ai_prompt && showPrompt && (
+        <div className="mt-2 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+          <div className="flex items-start gap-2">
+            <Sparkles size={16} className="text-indigo-500 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <h4 className="text-[12px] font-bold text-slate-700 mb-2">Prompt Sent to AI</h4>
+              <div className="bg-white border border-slate-200 rounded-lg p-3 overflow-x-auto max-h-[300px] overflow-y-auto">
+                <pre className="text-[12px] text-slate-600 leading-relaxed font-mono whitespace-pre-wrap break-words">
+                  {task.ai_prompt}
+                </pre>
+              </div>
             </div>
           </div>
         </div>

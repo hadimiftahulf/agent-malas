@@ -55,6 +55,15 @@ export function initDb() {
     console.log('Migration completed successfully.');
   }
 
+  // Migration: Add ai_prompt to tasks table if not exists
+  const tasksTableInfo = db.prepare("PRAGMA table_info(tasks)").all();
+  const hasAiPrompt = tasksTableInfo.some(col => col.name === 'ai_prompt');
+  if (!hasAiPrompt) {
+    console.log('Migrating tasks table to add ai_prompt column...');
+    db.exec(`ALTER TABLE tasks ADD COLUMN ai_prompt TEXT;`);
+    console.log('Migration completed successfully.');
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
@@ -66,6 +75,7 @@ export function initDb() {
       base_branch TEXT,
       pr_number INTEGER,
       error_message TEXT,
+      ai_prompt TEXT,
       started_at DATETIME,
       completed_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -287,6 +297,11 @@ export function updateTaskStatus(id, status, extra = {}) {
   // Dynamic query — can't be fully cached due to variable SET clauses
   const stmt = db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = @id`);
   return stmt.run(params);
+}
+
+export function updateTaskPrompt(id, prompt) {
+  const stmt = db.prepare(`UPDATE tasks SET ai_prompt = @prompt WHERE id = @id`);
+  return stmt.run({ id, prompt });
 }
 
 export function getTask(id) {

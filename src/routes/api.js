@@ -9,12 +9,14 @@ import {
 import { getAgentState } from '../agent-state.js';
 import approvalRouter from './approval.js';
 import mobileRouter from './mobile.js';
+import serverInfoRouter from './server-info.js';
 
 export const apiRouter = Router();
 
 // Mount sub-routers
 apiRouter.use('/approval', approvalRouter);
 apiRouter.use('/mobile', mobileRouter);
+apiRouter.use('/server-info', serverInfoRouter);
 
 const startTime = Date.now();
 

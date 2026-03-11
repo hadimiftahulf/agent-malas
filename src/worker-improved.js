@@ -8,7 +8,7 @@ import { logger } from './logger.js';
 import { config } from './config.js';
 import { runTestsAndHeal } from './test-runner.js';
 import { updateProjectItemStatus } from './github-project.js';
-import { insertPR, updateTaskStatus, markCommentProcessed } from './db.js';
+import { insertPR, updateTaskStatus, markCommentProcessed, updateTaskPrompt } from './db.js';
 import { sendTaskCompletionNotification, sendTaskFailureNotification } from './report.js';
 import { retryGitOperation, retryGitHubAPI, withTimeout } from './retry-helper.js';
 import { acquireTaskLock, releaseTaskLock } from './db-transactions.js';
@@ -206,17 +206,28 @@ export async function processTask(task) {
 
         let commentContext = '';
         if (task.comments && task.comments.length > 0) {
-            commentContext = '\n\nQA/Reviewer Feedback (from issue comments):\n' +
-                task.comments.map(c => `- @${c.author} (${c.createdAt}): ${c.body}`).join('\n');
+            let combinedComments = task.comments.map(c => `- @${c.author} (${c.createdAt}): ${c.body}`).join('\n');
+            if (combinedComments.length > 5000) {
+                combinedComments = combinedComments.substring(0, 5000) + '\n... [COMMENTS TRUNCATED due to length limit]';
+            }
+            commentContext = '\n\nQA/Reviewer Feedback (from issue comments):\n' + combinedComments;
         }
 
-        const prompt = `You are an AI Developer. Your task is: ${task.title}\n\nTask Description: ${task.description}${commentContext}\n\nGuidelines:\n${instructions}\n\nPlease implement this feature and modify the files directly.`;
+        let taskDesc = task.description || '';
+        if (taskDesc.length > 15000) {
+            taskDesc = taskDesc.substring(0, 15000) + '\n\n... [DESCRIPTION TRUNCATED due to length limit] ...';
+        }
+
+        const prompt = `You are an AI Developer. Your task is: ${task.title}\n\nTask Description: ${taskDesc}${commentContext}\n\nGuidelines:\n${instructions}\n\nPlease implement this feature and modify the files directly.`;
 
         const geminiArgs = ['-p', prompt];
         if (config.geminiYolo) {
             geminiArgs.push('-y');
             logger.info('YOLO mode enabled - AI will auto-fix autonomously', task.id);
         }
+
+        // Save AI Prompt to DB
+        updateTaskPrompt(String(task.id), prompt);
 
         await withTimeout(
             () => execa('gemini', geminiArgs, { cwd: repoDir, stdio: 'inherit' }),
@@ -423,6 +434,13 @@ export async function processRejectedPR(pr) {
                     commentContext = '\n[General Review Comment]';
                 }
 
+                // Truncate diff if it's too long
+                const MAX_DIFF_LENGTH = 15000;
+                let diffContext = diff || '';
+                if (diffContext.length > MAX_DIFF_LENGTH) {
+                    diffContext = diffContext.substring(0, MAX_DIFF_LENGTH) + '\n\n... [DIFF TRUNCATED due to length limit. Please rely on your file reading tools if you need more context] ...';
+                }
+
                 const prompt = `You are an AI Developer fixing a rejected Pull Request.
 
 This is comment ${commentNum} of ${unprocessedComments.length} that needs to be addressed.
@@ -432,18 +450,24 @@ Reviewer's feedback:
 ${comment.comment_body}
 
 Current PR diff for context:
-${diff}
+${diffContext}
 
 Guidelines:
 ${instructions}
 
-Please implement the requested changes and modify the files directly in the workspace to fix this specific issue.
-Focus ONLY on addressing this particular comment. Be precise and minimal in your changes.`;
+CRITICAL INSTRUCTIONS:
+1. You MUST use your file editing capabilities (tools) to implement the requested changes directly in this workspace.
+2. If you don't edit any files, this task will be marked as FAILED.
+3. Focus ONLY on addressing this particular comment. Be precise and minimal in your changes. 
+4. DO NOT just explain how to fix it, actually write the code modifications.`;
 
                 const geminiArgs = ['-p', prompt];
                 if (config.geminiYolo) {
                     geminiArgs.push('-y');
                 }
+
+                // Save PR AI Prompt to DB (menggunakan PR Task ID)
+                updateTaskPrompt(`PR-${pr.number}`, prompt);
 
                 // Log the prompt being sent to AI
                 logger.info(`\n${'─'.repeat(80)}`);
@@ -503,19 +527,27 @@ PR: #${pr.number}`;
                     logger.warn(`⚠️  Comment ${commentNum} processed but AI made no changes. Trying simplified prompt...`);
 
                     // RETRY with simplified prompt
-                    const simplePrompt = `Fix this issue in the code:
+                    const simplePrompt = `CRITICAL: You are retrying a failed attempt to fix this issue. Please try a different approach.
 
+Feedback to address:
 ${comment.comment_body}
 
-${comment.file_path ? `File: ${comment.file_path}` : ''}
+${comment.file_path ? `Target File: ${comment.file_path}` : 'No specific file mentioned.'}
 
-Make the minimal change needed to address this feedback. Be direct and specific.`;
+INSTRUCTIONS:
+1. First, read the target file (if provided) or search the codebase to find where this issue occurs.
+2. Then, make the MINIMAL code change necessary to address this specific feedback using your file editing tools.
+3. DO NOT just explain the fix; YOU MUST MODIFY THE CODE directly.
+4. If you fail to modify any files, the system will consider this a failure. Be direct and specific.`;
 
                     try {
                         const retryArgs = ['-p', simplePrompt];
                         if (config.geminiYolo) {
                             retryArgs.push('-y');
                         }
+
+                        // Save retry prompt to DB
+                        updateTaskPrompt(`PR-${pr.number}`, simplePrompt);
 
                         logger.info(`🔄 Retry attempt with simplified prompt...`);
                         await withTimeout(
