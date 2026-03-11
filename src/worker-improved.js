@@ -227,7 +227,7 @@ export async function processTask(task) {
 
         await withTimeout(
             () => execa('gemini', geminiArgs, { cwd: repoDir, stdio: 'inherit' }),
-            600000, // 10 minutes timeout for AI
+            240000, // 4 minutes timeout for AI tasks to prevent long cognitive loops
             'AI processing timeout'
         );
 
@@ -455,7 +455,8 @@ CRITICAL INSTRUCTIONS:
 1. You MUST use your file editing capabilities (tools) to implement the requested changes directly in this workspace.
 2. If you don't edit any files, this task will be marked as FAILED.
 3. Focus ONLY on addressing this particular comment. Be precise and minimal in your changes. 
-4. DO NOT just explain how to fix it, actually write the code modifications.`;
+4. DO NOT just explain how to fix it, actually write the code modifications.
+5. ANTI-LOOP WARNING: If you cannot find the target file or issue within 2-3 searches, DO NOT fall into an endless loop. Stop searching and return immediately.`;
 
                 // ALWAYS use YOLO (-y) mode for non-interactive worker execution.
                 // Otherwise `gemini` will hang waiting for "[Y/n]" stdin input.
@@ -482,7 +483,7 @@ CRITICAL INSTRUCTIONS:
                         stdio: 'pipe',  // Changed from 'inherit' to capture output
                         all: true
                     }),
-                    900000,  // Increased to 15 minutes per comment
+                    210000,  // Reduced to 3.5 minutes to fast-fail on cognitive loops
                     'AI fixing timeout'
                 );
 
@@ -533,7 +534,8 @@ INSTRUCTIONS:
 1. First, read the target file (if provided) or search the codebase to find where this issue occurs.
 2. Then, make the MINIMAL code change necessary to address this specific feedback using your file editing tools.
 3. DO NOT just explain the fix; YOU MUST MODIFY THE CODE directly.
-4. If you fail to modify any files, the system will consider this a failure. Be direct and specific.`;
+4. If you fail to modify any files, the system will consider this a failure. Be direct and specific.
+5. ANTI-LOOP WARNING: If you cannot resolve it easily, DO NOT loop endlessly. Fail fast and exit.`;
 
                     try {
                         const retryArgs = ['-p', simplePrompt];
@@ -551,7 +553,7 @@ INSTRUCTIONS:
                                 stdio: 'pipe',
                                 all: true
                             }),
-                            600000,  // 10 minutes for retry
+                            180000,  // Reduced to 3 minutes for retry to fail fast
                             'AI retry timeout'
                         );
 
