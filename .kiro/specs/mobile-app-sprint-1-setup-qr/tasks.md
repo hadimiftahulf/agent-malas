@@ -10,7 +10,7 @@ Each task builds on previous work and includes specific file references, accepta
 
 ## Tasks
 
-- [ ] 1. Initialize Flutter project structure and dependencies
+- [x] 1. Initialize Flutter project structure and dependencies
   - Create new Flutter project with command: `flutter create agent_malas_mobile`
   - Configure `pubspec.yaml` with all required dependencies (provider, dio, web_socket_channel, mobile_scanner, shared_preferences, flutter_local_notifications, google_fonts, intl, logger)
   - Set up folder structure: config/, models/, services/, screens/, widgets/, utils/
@@ -22,7 +22,7 @@ Each task builds on previous work and includes specific file references, accepta
   - _Estimate: 2 hours_
 
 - [ ] 2. Implement backend server-info endpoint
-  - [ ] 2.1 Create server-info route with IP detection logic
+  - [x] 2.1 Create server-info route with IP detection logic
     - Create `src/routes/server-info.js` with GET endpoint at `/api/server-info`
     - Implement `getLocalIPAddress()` function to detect local network IP (not localhost)
     - Prioritize 192.168.x.x and 10.x.x.x network ranges
@@ -49,7 +49,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `test/routes/server-info.test.js`_
     - _Estimate: 1 hour_
 
-  - [ ] 2.4 Integrate server-info route into Express app
+  - [-] 2.4 Integrate server-info route into Express app
     - Import and mount server-info router in `src/index.js` or `src/server.js`
     - Add route: `app.use('/api/server-info', serverInfoRouter)`
     - Test endpoint manually with curl or browser
@@ -58,7 +58,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 0.5 hours_
 
 - [ ] 3. Implement web frontend QR code generator
-  - [ ] 3.1 Create useServerInfo hook
+  - [~] 3.1 Create useServerInfo hook
     - Create `frontend/src/hooks/useServerInfo.js` hook
     - Fetch server info from `/api/server-info` endpoint
     - Implement auto-refresh mechanism
@@ -68,7 +68,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `frontend/src/hooks/useServerInfo.js`_
     - _Estimate: 1.5 hours_
   
-  - [ ] 3.2 Create QRCodeModal component
+  - [~] 3.2 Create QRCodeModal component
     - Install qrcode.react dependency: `npm install qrcode.react`
     - Create `frontend/src/components/QRCodeModal.jsx` component
     - Use useServerInfo hook to fetch server information
@@ -90,7 +90,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `frontend/src/components/__tests__/QRCodeModal.test.jsx`_
     - _Estimate: 1 hour_
   
-  - [ ] 3.4 Add "Connect Mobile App" button to Header
+  - [~] 3.4 Add "Connect Mobile App" button to Header
     - Modify `frontend/src/components/Header.jsx` to add button
     - Add state to control QRCodeModal visibility
     - Render QRCodeModal component with isOpen and onClose props
@@ -100,7 +100,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 1 hour_
 
 - [ ] 4. Implement mobile app data models
-  - [ ] 4.1 Create ApiConfig model
+  - [~] 4.1 Create ApiConfig model
     - Create `lib/models/api_config.dart` with ApiConfig class
     - Add fields: apiUrl, wsUrl, deviceName, timestamp
     - Implement toJson() and fromJson() methods
@@ -118,7 +118,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `test/models/api_config_test.dart`_
     - _Estimate: 1 hour_
   
-  - [ ] 4.3 Create ServerInfo model
+  - [~] 4.3 Create ServerInfo model
     - Create `lib/models/server_info.dart` with ServerInfo class
     - Add fields: ipAddress, port, timestamp
     - Implement toJson() and fromJson() methods
@@ -127,14 +127,14 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 0.5 hours_
 
 - [ ] 5. Implement mobile app configuration and theme
-  - [ ] 5.1 Create AppConfig
+  - [~] 5.1 Create AppConfig
     - Create `lib/config/app_config.dart` with app constants
     - Define appName, appVersion, connectionTimeout, maxRetries
     - _Requirements: 12.1_
     - _Files to create: `lib/config/app_config.dart`_
     - _Estimate: 0.5 hours_
   
-  - [ ] 5.2 Create ThemeConfig
+  - [~] 5.2 Create ThemeConfig
     - Create `lib/config/theme.dart` with Material Design 3 theme
     - Configure lightTheme and darkTheme using ColorScheme.fromSeed
     - Use Google Fonts (Inter) for text theme
@@ -144,7 +144,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 1 hour_
 
 - [ ] 6. Implement mobile storage service
-  - [ ] 6.1 Create StorageService class
+  - [~] 6.1 Create StorageService class
     - Create `lib/services/storage_service.dart` with StorageService class
     - Implement saveApiConfig() method using SharedPreferences
     - Implement getApiConfig() method that returns ApiConfig or null
@@ -180,7 +180,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 0.5 hours_
 
 - [ ] 7. Implement mobile API service
-  - [ ] 7.1 Create ApiService class with connection testing
+  - [~] 7.1 Create ApiService class with connection testing
     - Create `lib/services/api_service.dart` with ApiService class
     - Initialize Dio client with baseUrl
     - Implement testConnection() method that sends GET request to baseUrl
@@ -207,7 +207,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `test/services/api_service_test.dart`_
     - _Estimate: 1 hour_
   
-  - [ ] 7.4 Create WebSocketService placeholder
+  - [~] 7.4 Create WebSocketService placeholder
     - Create `lib/services/websocket_service.dart` with WebSocketService class
     - Add placeholder methods: connect(), disconnect(), isConnected getter
     - Add TODO comments for Sprint 2 implementation
@@ -216,7 +216,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 0.5 hours_
 
 - [ ] 8. Implement mobile validation utilities
-  - [ ] 8.1 Create URL validators
+  - [~] 8.1 Create URL validators
     - Create `lib/utils/validators.dart` with validation functions
     - Implement isValidHttpUrl() to validate HTTP/HTTPS URLs
     - Implement isValidWsUrl() to validate WS/WSS URLs
@@ -234,7 +234,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `test/utils/validators_test.dart`_
     - _Estimate: 1.5 hours_
   
-  - [ ] 8.3 Create ApiConfigValidator
+  - [~] 8.3 Create ApiConfigValidator
     - Add ApiConfigValidator class to `lib/utils/validators.dart`
     - Implement validate() method that checks JSON structure
     - Verify all required fields present (apiUrl, wsUrl, deviceName, timestamp)
@@ -253,7 +253,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `test/utils/validators_test.dart`_
     - _Estimate: 1 hour_
 
-- [ ] 9. Checkpoint - Ensure all tests pass
+- [~] 9. Checkpoint - Ensure all tests pass
   - Run all unit tests and property tests
   - Verify backend server-info endpoint works
   - Verify web frontend QR code displays correctly
@@ -261,7 +261,7 @@ Each task builds on previous work and includes specific file references, accepta
   - Ask the user if questions arise
 
 - [ ] 10. Implement QR scanner screen
-  - [ ] 10.1 Create QRScannerScreen with camera preview
+  - [~] 10.1 Create QRScannerScreen with camera preview
     - Create `lib/screens/qr_scanner_screen.dart` with QRScannerScreen widget
     - Use mobile_scanner package for camera preview
     - Add MobileScanner widget with onDetect callback
@@ -272,7 +272,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `lib/screens/qr_scanner_screen.dart`_
     - _Estimate: 3 hours_
   
-  - [ ] 10.2 Implement QR code parsing and validation
+  - [~] 10.2 Implement QR code parsing and validation
     - In QRScannerScreen, parse QR code data as JSON
     - Use ApiConfigValidator to validate parsed data
     - Display error snackbar for invalid QR codes with specific messages
@@ -281,7 +281,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `lib/screens/qr_scanner_screen.dart`_
     - _Estimate: 1.5 hours_
   
-  - [ ] 10.3 Implement connection testing and config saving
+  - [~] 10.3 Implement connection testing and config saving
     - After successful QR parse, call ApiService.testConnection()
     - Show loading indicator during connection test
     - Display error if connection fails with server URL
@@ -293,7 +293,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `lib/screens/qr_scanner_screen.dart`_
     - _Estimate: 2 hours_
   
-  - [ ] 10.4 Implement camera permission handling
+  - [~] 10.4 Implement camera permission handling
     - Request camera permission when screen loads
     - Show permission dialog if denied with explanation
     - Provide button to open app settings if permanently denied
@@ -311,7 +311,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 2 hours_
 
 - [ ] 11. Implement manual setup screen
-  - [ ] 11.1 Create ManualSetupScreen with input fields
+  - [~] 11.1 Create ManualSetupScreen with input fields
     - Create `lib/screens/manual_setup_screen.dart` with ManualSetupScreen widget
     - Add TextFormField for API URL with label and hint
     - Add TextFormField for WebSocket URL with label and hint
@@ -322,7 +322,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `lib/screens/manual_setup_screen.dart`_
     - _Estimate: 2 hours_
   
-  - [ ] 11.2 Implement URL validation and connection testing
+  - [~] 11.2 Implement URL validation and connection testing
     - Add real-time validation using isValidHttpUrl() and isValidWsUrl()
     - Display inline error messages for invalid URLs
     - Disable Connect button until both URLs are valid
@@ -333,7 +333,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `lib/screens/manual_setup_screen.dart`_
     - _Estimate: 2 hours_
   
-  - [ ] 11.3 Implement config saving and navigation
+  - [~] 11.3 Implement config saving and navigation
     - Create ApiConfig from validated URLs
     - Save config using StorageService
     - Navigate to dashboard on success
@@ -350,7 +350,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 1.5 hours_
 
 - [ ] 12. Implement splash screen and initialization flow
-  - [ ] 12.1 Create SplashScreen
+  - [~] 12.1 Create SplashScreen
     - Create `lib/screens/splash_screen.dart` with SplashScreen widget
     - Display app logo (centered, 128x128dp)
     - Display app name below logo (Headline style)
@@ -360,7 +360,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `lib/screens/splash_screen.dart`_
     - _Estimate: 1.5 hours_
   
-  - [ ] 12.2 Implement initialization logic
+  - [~] 12.2 Implement initialization logic
     - In SplashScreen initState, check for existing config using StorageService
     - If config exists, navigate to DashboardScreen
     - If no config, navigate to QRScannerScreen
@@ -370,7 +370,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `lib/screens/splash_screen.dart`_
     - _Estimate: 1 hour_
   
-  - [ ] 12.3 Create DashboardScreen placeholder
+  - [~] 12.3 Create DashboardScreen placeholder
     - Create `lib/screens/dashboard_screen.dart` with DashboardScreen widget
     - Add AppBar with title "Agent Malas" and settings icon
     - Display connection status card showing server URL
@@ -387,7 +387,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 1 hour_
 
 - [ ] 13. Wire up main app with Provider and routing
-  - [ ] 13.1 Create AppState provider
+  - [~] 13.1 Create AppState provider
     - Create `lib/providers/app_state.dart` with AppState class extending ChangeNotifier
     - Add fields: _apiConfig, _isLoading, _errorMessage
     - Implement loadConfig(), saveConfig(), clearConfig() methods
@@ -397,7 +397,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `lib/providers/app_state.dart`_
     - _Estimate: 1.5 hours_
   
-  - [ ] 13.2 Configure main.dart with Provider and theme
+  - [~] 13.2 Configure main.dart with Provider and theme
     - Modify `lib/main.dart` to wrap app with ChangeNotifierProvider
     - Configure MaterialApp with ThemeConfig.lightTheme and darkTheme
     - Set home to SplashScreen
@@ -406,7 +406,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `lib/main.dart`_
     - _Estimate: 1 hour_
   
-  - [ ] 13.3 Implement navigation between screens
+  - [~] 13.3 Implement navigation between screens
     - Add navigation from SplashScreen to QRScannerScreen or DashboardScreen
     - Add navigation from QRScannerScreen to ManualSetupScreen
     - Add navigation from QRScannerScreen to DashboardScreen on success
@@ -417,7 +417,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `lib/screens/splash_screen.dart`, `lib/screens/qr_scanner_screen.dart`, `lib/screens/manual_setup_screen.dart`_
     - _Estimate: 1 hour_
 
-- [ ] 14. Checkpoint - Ensure all tests pass
+- [~] 14. Checkpoint - Ensure all tests pass
   - Run all unit tests, property tests, and integration tests
   - Test complete user flows manually on device
   - Verify QR code scanning works end-to-end
@@ -427,7 +427,7 @@ Each task builds on previous work and includes specific file references, accepta
   - Ask the user if questions arise
 
 - [ ] 15. Implement error handling and user feedback
-  - [ ] 15.1 Create error message utilities
+  - [~] 15.1 Create error message utilities
     - Create `lib/utils/error_messages.dart` with user-friendly error messages
     - Define messages for network errors, validation errors, permission errors
     - Follow error message guidelines from design (specific, actionable, plain language)
@@ -435,7 +435,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `lib/utils/error_messages.dart`_
     - _Estimate: 1 hour_
   
-  - [ ] 15.2 Add error handling to QRScannerScreen
+  - [~] 15.2 Add error handling to QRScannerScreen
     - Display specific error messages for invalid QR codes
     - Display network error messages for connection failures
     - Display permission error messages with guidance
@@ -444,7 +444,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `lib/screens/qr_scanner_screen.dart`_
     - _Estimate: 1 hour_
   
-  - [ ] 15.3 Add error handling to ManualSetupScreen
+  - [~] 15.3 Add error handling to ManualSetupScreen
     - Display validation error messages inline
     - Display network error messages for connection failures
     - Provide actionable guidance in error messages
@@ -452,7 +452,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `lib/screens/manual_setup_screen.dart`_
     - _Estimate: 1 hour_
   
-  - [ ] 15.4 Add loading indicators
+  - [~] 15.4 Add loading indicators
     - Show loading indicator during connection tests in QRScannerScreen
     - Show loading indicator during connection tests in ManualSetupScreen
     - Disable user interaction during loading states
@@ -461,7 +461,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 1 hour_
 
 - [ ] 16. Add app branding and polish
-  - [ ] 16.1 Create app icon and splash assets
+  - [~] 16.1 Create app icon and splash assets
     - Design or obtain app icon (512x512 minimum)
     - Generate Android launcher icons using flutter_launcher_icons
     - Configure splash screen assets
@@ -470,7 +470,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to create: `assets/icon.png`, `android/app/src/main/res/mipmap-*/ic_launcher.png`_
     - _Estimate: 2 hours_
   
-  - [ ] 16.2 Add constants and helper utilities
+  - [~] 16.2 Add constants and helper utilities
     - Create `lib/utils/constants.dart` with app-wide constants
     - Create `lib/utils/helpers.dart` with helper functions
     - Add any reusable utility functions discovered during implementation
@@ -512,7 +512,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Estimate: 1.5 hours_
 
 - [ ] 18. Write backend and frontend tests
-  - [ ]* 18.1 Write backend unit tests for server-info endpoint
+  - [~]* 18.1 Write backend unit tests for server-info endpoint
     - Test GET /api/server-info returns correct structure
     - Test IP address is not localhost
     - Test error handling when network interfaces unavailable
@@ -564,7 +564,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `integration_test/initialization_test.dart`_
     - _Estimate: 1 hour_
 
-- [ ] 20. Final checkpoint and polish
+- [~] 20. Final checkpoint and polish
   - Run complete test suite (unit, property, integration, e2e)
   - Verify all 11 correctness properties pass
   - Test on multiple Android devices/emulators
@@ -578,7 +578,7 @@ Each task builds on previous work and includes specific file references, accepta
   - Ask the user if questions arise
 
 - [ ] 21. Documentation and build preparation
-  - [ ] 21.1 Update README with setup instructions
+  - [~] 21.1 Update README with setup instructions
     - Document Flutter project setup
     - Document backend setup for server-info endpoint
     - Document web frontend setup for QR code generator
@@ -587,7 +587,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `README.md` or create `agent_malas_mobile/README.md`_
     - _Estimate: 1 hour_
   
-  - [ ] 21.2 Configure release build settings
+  - [~] 21.2 Configure release build settings
     - Create keystore for app signing (development)
     - Configure `android/key.properties` (template only, not committed)
     - Update `android/app/build.gradle` for release signing
@@ -596,7 +596,7 @@ Each task builds on previous work and includes specific file references, accepta
     - _Files to modify: `android/app/build.gradle`, `pubspec.yaml`_
     - _Estimate: 1 hour_
   
-  - [ ] 21.3 Test release build
+  - [~] 21.3 Test release build
     - Build release APK: `flutter build apk --release`
     - Install on physical device
     - Test complete user flows on release build
