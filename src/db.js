@@ -628,3 +628,16 @@ export function hasPendingNotification(taskId) {
   `).get(taskId);
   return result.count > 0;
 }
+
+/**
+ * Reset all 'processing' tasks back to 'queued'
+ * Useful on server startup to recover from crashes
+ */
+export function resetProcessingTasks() {
+  const info = db.prepare(`
+    UPDATE tasks 
+    SET status = 'queued' 
+    WHERE status = 'processing'
+  `).run();
+  return info.changes;
+}

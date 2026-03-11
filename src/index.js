@@ -4,7 +4,7 @@ import { fetchReadyTasks } from './github-project.js';
 import { fetchRejectedPRs } from './github-pr.js';
 import { processTask, processRejectedPR } from './worker-improved.js';
 import { sendDailyStandup } from './report.js';
-import { initDb, upsertQueuedTask, updateTaskStatus, insertPR, incrementMetric, getTask } from './db.js';
+import { initDb, upsertQueuedTask, updateTaskStatus, insertPR, incrementMetric, getTask, resetProcessingTasks } from './db.js';
 import { startServer } from './server.js';
 import { setupWebSocket, broadcast } from './websocket.js';
 import { setAgentStatus, setCurrentTask, setLastRun } from './agent-state.js';
@@ -291,6 +291,11 @@ async function main() {
   // Initialize database
   initDb();
   logger.info('Database initialized');
+
+  const resetCount = resetProcessingTasks();
+  if (resetCount > 0) {
+    logger.info(`Reset ${resetCount} stuck tasks to 'queued' state`);
+  }
 
   // Start API server and setup WebSocket
   const httpServer = await startServer(config.apiPort);
