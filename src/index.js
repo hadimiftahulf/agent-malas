@@ -111,14 +111,14 @@ async function run(once = false) {
         setAgentStatus('waiting_approval');
         broadcast('agent:status', { status: 'waiting_approval', taskId });
         setLastRun(new Date().toISOString());
-        task = null; // Don't process this task, wait for approval
+        return; // Don't process this task, wait for approval, and exit loop interval!
       } else if (!isTaskApproved(taskId)) {
         // Check if task is approved
         logger.info(`Task ${taskId} is not yet approved. Waiting...`);
         setAgentStatus('waiting_approval');
         broadcast('agent:status', { status: 'waiting_approval', taskId });
         setLastRun(new Date().toISOString());
-        task = null; // Don't process this task, wait for approval
+        return; // Don't process this task, exit loop interval!
       }
     }
 
@@ -238,14 +238,14 @@ async function run(once = false) {
         setAgentStatus('waiting_approval');
         broadcast('agent:status', { status: 'waiting_approval', taskId: prTaskId });
         setLastRun(new Date().toISOString());
-        pr = null; // Don't process this PR, wait for approval
+        return; // Don't process this PR, wait for approval, and exit loop interval!
       } else if (!isTaskApproved(prTaskId)) {
         // Check if approved
         logger.info(`PR #${pr.number} fix is not yet approved. Waiting...`);
         setAgentStatus('waiting_approval');
         broadcast('agent:status', { status: 'waiting_approval', taskId: prTaskId });
         setLastRun(new Date().toISOString());
-        pr = null; // Don't process this PR, wait for approval
+        return; // Don't process this PR, exit loop interval!
       }
     }
 
