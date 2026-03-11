@@ -7,10 +7,8 @@ import 'screens/splash_screen.dart';
 
 /// Main entry point for Agent Malas Mobile App
 ///
-/// Configures Provider for state management and sets up the app theme.
-/// The app uses Material Design 3 with custom light and dark themes.
-///
-/// **Validates: Requirements 12.1, 12.2, 12.5**
+/// Configures Provider for state management and sets up premium light mode theme.
+/// Forces ThemeMode.light for premium UI experience.
 void main() {
   runApp(
     ChangeNotifierProvider(
@@ -29,7 +27,8 @@ class MyApp extends StatelessWidget {
       title: AppConfig.appName,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.light, // Force light mode per user request
+      debugShowCheckedModeBanner: false,
       home: const SplashScreen(),
     );
   }

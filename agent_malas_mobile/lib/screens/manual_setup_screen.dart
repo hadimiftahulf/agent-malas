@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/api_config.dart';
 import '../services/api_service.dart';
-import '../services/storage_service.dart';
+import '../providers/app_state.dart';
 import '../utils/validators.dart';
-import 'dashboard_screen.dart';
+import 'home_screen.dart';
 
 /// Manual Setup Screen for entering server connection details manually
 /// 
@@ -30,7 +31,7 @@ class _ManualSetupScreenState extends State<ManualSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiUrlController = TextEditingController();
   final _wsUrlController = TextEditingController();
-  final StorageService _storageService = StorageService();
+
   
   bool _isConnecting = false;
   String? _errorMessage;
@@ -87,9 +88,9 @@ class _ManualSetupScreenState extends State<ManualSetupScreen> {
         return;
       }
 
-      // Connection successful - save config (Requirement 5.6)
-      debugPrint('Connection successful, saving config');
-      await _storageService.saveApiConfig(apiConfig);
+      if (mounted) {
+        await context.read<AppState>().saveConfig(apiConfig);
+      }
       
       // Show success message
       if (mounted) {
@@ -103,16 +104,16 @@ class _ManualSetupScreenState extends State<ManualSetupScreen> {
         );
       }
       
-      // Navigate to dashboard screen (Requirement 5.7)
+      // Navigate to home screen (Requirement 5.7)
       if (mounted) {
-        // Wait a moment for the success message to be visible
         await Future.delayed(const Duration(milliseconds: 500));
         
         if (mounted) {
-          Navigator.of(context).pushReplacement(
+          Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
-              builder: (context) => const DashboardScreen(),
+              builder: (context) => const HomeScreen(),
             ),
+            (route) => false,
           );
         }
       }

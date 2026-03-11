@@ -4,10 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/api_config.dart';
+import 'package:provider/provider.dart';
 import '../services/api_service.dart';
-import '../services/storage_service.dart';
+import '../providers/app_state.dart';
 import '../utils/validators.dart';
-import 'dashboard_screen.dart';
+import 'home_screen.dart';
 import 'manual_setup_screen.dart';
 
 /// QR Scanner Screen for scanning QR codes from the web app
@@ -39,7 +40,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   bool _isProcessing = false;
   bool _hasPermission = false;
   bool _isCheckingPermission = true;
-  final StorageService _storageService = StorageService();
+
 
   @override
   void initState() {
@@ -212,9 +213,11 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         return;
       }
 
-      // Connection successful - save config (Requirement 3.7)
+      // Connection successful - save config via AppState (Requirement 3.7)
       debugPrint('Connection successful, saving config');
-      await _storageService.saveApiConfig(apiConfig);
+      if (mounted) {
+        await context.read<AppState>().saveConfig(apiConfig);
+      }
       
       // Trigger haptic feedback on success
       HapticFeedback.mediumImpact();
@@ -222,16 +225,16 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       // Display success message with device name (Requirement 3.9)
       _showSuccess('Connected to ${apiConfig.deviceName}');
       
-      // Navigate to dashboard screen (Requirement 3.8)
+      // Navigate to home screen (Requirement 3.8)
       if (mounted) {
-        // Wait a moment for the success message to be visible
         await Future.delayed(const Duration(milliseconds: 500));
         
         if (mounted) {
-          Navigator.of(context).pushReplacement(
+          Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
-              builder: (context) => const DashboardScreen(),
+              builder: (context) => const HomeScreen(),
             ),
+            (route) => false,
           );
         }
       }

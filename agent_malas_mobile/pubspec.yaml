@@ -64,6 +64,9 @@ dependencies:
   
   # Logging
   logger: ^2.5.0
+  url_launcher: ^6.3.2
+  flutter_native_splash: ^2.4.7
+  image: ^4.8.0
 
 dev_dependencies:
   flutter_test:
@@ -77,7 +80,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   
   # Icon generation
-  flutter_launcher_icons: ^0.14.1
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -93,6 +96,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/icon.png
+    - assets/gemini_logo.png
     - assets/icon_1024.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -125,6 +129,6 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/icon.png"
-  adaptive_icon_background: "#2196F3"
-  adaptive_icon_foreground: "assets/icon.png"
+  image_path: "assets/gemini_logo.png"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/gemini_logo.png"

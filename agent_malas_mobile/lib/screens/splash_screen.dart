@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:provider/provider.dart';
 import 'package:agent_malas_mobile/config/app_config.dart';
-import 'package:agent_malas_mobile/services/storage_service.dart';
-import 'package:agent_malas_mobile/screens/dashboard_screen.dart';
+import 'package:agent_malas_mobile/providers/app_state.dart';
+import 'package:agent_malas_mobile/screens/home_screen.dart';
 import 'package:agent_malas_mobile/screens/qr_scanner_screen.dart';
 
 /// Splash screen displayed during app initialization
@@ -9,8 +11,8 @@ import 'package:agent_malas_mobile/screens/qr_scanner_screen.dart';
 /// This screen is shown when the app launches and performs the following:
 /// - Displays the app logo and name
 /// - Shows a loading indicator
-/// - Checks for existing configuration using StorageService
-/// - Navigates to DashboardScreen if config exists
+/// - Checks for existing configuration using AppState provider
+/// - Navigates to HomeScreen if config exists
 /// - Navigates to QRScannerScreen if no config exists
 /// - Displays splash for minimum 1 second
 /// - Uses fade transition for navigation
@@ -24,12 +26,14 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final StorageService _storageService = StorageService();
 
   @override
   void initState() {
     super.initState();
-    _initializeApp();
+    // Defer to post-frame callback to avoid notifyListeners during build
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _initializeApp();
+    });
   }
 
   /// Initialize app by checking for existing configuration
@@ -40,8 +44,10 @@ class _SplashScreenState extends State<SplashScreen> {
     final startTime = DateTime.now();
 
     try {
-      // Check if API configuration exists in storage (Requirement 7.1)
-      final hasConfig = await _storageService.hasConfig();
+      // Load config via AppState provider (Requirement 7.1)
+      final appState = context.read<AppState>();
+      await appState.loadConfig();
+      final hasConfig = appState.isConfigured;
 
       // Calculate remaining time to meet minimum 1 second display
       final elapsed = DateTime.now().difference(startTime);
@@ -86,7 +92,7 @@ class _SplashScreenState extends State<SplashScreen> {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const DashboardScreen(),
+            const HomeScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: animation,
@@ -143,7 +149,7 @@ class _SplashScreenState extends State<SplashScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(24),
                 child: Image.asset(
-                  'assets/icon.png',
+                  'assets/gemini_logo.png',
                   width: 128,
                   height: 128,
                   fit: BoxFit.cover,

@@ -145,14 +145,19 @@ export function acquireTaskLock(taskId) {
             const task = db.prepare('SELECT status FROM tasks WHERE id = ?').get(taskId);
 
             if (!task) {
+                console.error(`[acquireTaskLock] Task ${taskId} not found`);
                 throw new Error('Task not found');
             }
 
+            console.log(`[acquireTaskLock] Task ${taskId} current status: ${task.status}`);
+
             if (task.status === 'processing') {
+                console.error(`[acquireTaskLock] Task ${taskId} already being processed`);
                 throw new Error('Task already being processed');
             }
 
             if (task.status === 'done' || task.status === 'failed') {
+                console.error(`[acquireTaskLock] Task ${taskId} already completed with status: ${task.status}`);
                 throw new Error('Task already completed');
             }
 
@@ -160,11 +165,13 @@ export function acquireTaskLock(taskId) {
             db.prepare('UPDATE tasks SET status = ?, started_at = ? WHERE id = ?')
                 .run('processing', new Date().toISOString(), taskId);
 
+            console.log(`[acquireTaskLock] Task ${taskId} locked successfully`);
             return true;
         });
 
         return transaction();
     } catch (error) {
+        console.error(`[acquireTaskLock] Failed to acquire lock for task ${taskId}: ${error.message}`);
         return false;
     }
 }

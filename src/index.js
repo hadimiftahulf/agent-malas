@@ -73,6 +73,9 @@ async function run(once = false) {
       const idStr = String(t.id);
       const dbTask = getTask(idStr);
 
+      logger.info(`Checking task ${idStr}: ${t.title}`);
+      logger.info(`DB task status: ${dbTask ? dbTask.status : 'not found'}, approval: ${dbTask ? dbTask.approval_status : 'not found'}`);
+
       if (isTaskRejected(idStr)) {
         if (dbTask && dbTask.status !== 'skipped') {
           logger.info(`Task ${idStr} was rejected. Skipping locally...`);
@@ -85,16 +88,21 @@ async function run(once = false) {
 
       // Lewati task yang sudah lewat fase eksekusi atau sedang berjalan
       if (dbTask && ['done', 'failed', 'skipped', 'processing'].includes(dbTask.status)) {
+        logger.info(`Skipping task ${idStr} - status: ${dbTask.status}`);
         continue;
       }
 
       task = t;
       taskId = idStr;
       taskFromDb = dbTask;
+      logger.info(`Selected task ${idStr} for processing`);
       break;
     }
 
     if (task) {
+      logger.info(`Processing task ${taskId}: ${task.title}`);
+      logger.info(`Task DB status: ${taskFromDb ? taskFromDb.approval_status : 'not in DB'}`);
+
       // If task is new or pending approval, request approval
       if (!taskFromDb || taskFromDb.approval_status === 'pending') {
         logger.info(`Task ${taskId} requires approval: ${task.title}`);
@@ -112,9 +120,9 @@ async function run(once = false) {
         broadcast('agent:status', { status: 'waiting_approval', taskId });
         setLastRun(new Date().toISOString());
         return; // Don't process this task, wait for approval, and exit loop interval!
-      } else if (!isTaskApproved(taskId)) {
-        // Check if task is approved
-        logger.info(`Task ${taskId} is not yet approved. Waiting...`);
+      } else if (taskFromDb.approval_status !== 'approved') {
+        // Check if task is approved using DB status directly instead of helper function
+        logger.info(`Task ${taskId} is not yet approved (status: ${taskFromDb.approval_status}). Waiting...`);
         setAgentStatus('waiting_approval');
         broadcast('agent:status', { status: 'waiting_approval', taskId });
         setLastRun(new Date().toISOString());
@@ -131,9 +139,7 @@ async function run(once = false) {
       broadcast('agent:status', { status: 'processing' });
       broadcast('queue:update', { tasks: tasks.map(t => ({ id: t.id, title: t.title, repo: t.repo })) });
 
-      // Mark the active task as 'processing'
-      updateTaskStatus(taskId, 'processing');
-
+      // processTask will handle status updates through acquireTaskLock
       const success = await processTask(task);
 
       if (success) {
@@ -176,7 +182,7 @@ async function run(once = false) {
         reviewDecision: 'changes_requested',
         url: p.url,
       });
-      
+
       upsertQueuedTask({
         id: `PR-${p.number}`,
         title: `Fix PR #${p.number}: ${p.title}`,

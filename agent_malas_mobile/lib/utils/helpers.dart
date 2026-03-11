@@ -367,7 +367,7 @@ class ColorHelper {
   ///
   /// Example: toHex(Color(0xFFFF5733)) -> "#FF5733"
   static String toHex(Color color) {
-    return '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+    return '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
   }
 
   /// Get contrasting text color (black or white) for background
