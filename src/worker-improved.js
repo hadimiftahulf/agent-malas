@@ -220,11 +220,7 @@ export async function processTask(task) {
 
         const prompt = `You are an AI Developer. Your task is: ${task.title}\n\nTask Description: ${taskDesc}${commentContext}\n\nGuidelines:\n${instructions}\n\nPlease implement this feature and modify the files directly.`;
 
-        const geminiArgs = ['-p', prompt];
-        if (config.geminiYolo) {
-            geminiArgs.push('-y');
-            logger.info('YOLO mode enabled - AI will auto-fix autonomously', task.id);
-        }
+        const geminiArgs = ['-p', prompt, '-y'];
 
         // Save AI Prompt to DB
         updateTaskPrompt(String(task.id), prompt);
@@ -461,10 +457,9 @@ CRITICAL INSTRUCTIONS:
 3. Focus ONLY on addressing this particular comment. Be precise and minimal in your changes. 
 4. DO NOT just explain how to fix it, actually write the code modifications.`;
 
-                const geminiArgs = ['-p', prompt];
-                if (config.geminiYolo) {
-                    geminiArgs.push('-y');
-                }
+                // ALWAYS use YOLO (-y) mode for non-interactive worker execution.
+                // Otherwise `gemini` will hang waiting for "[Y/n]" stdin input.
+                const geminiArgs = ['-p', prompt, '-y'];
 
                 // Save PR AI Prompt to DB (menggunakan PR Task ID)
                 updateTaskPrompt(`PR-${pr.number}`, prompt);
