@@ -107,3 +107,9 @@ flutter_*.png
 
 # Temporary Scratch Files
 *.prompt.md
+
+# Flutter Desktop & Web
+agent_malas_mobile/windows/
+agent_malas_mobile/linux/
+agent_malas_mobile/macos/
+agent_malas_mobile/web/
