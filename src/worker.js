@@ -5,8 +5,9 @@ import { logger } from './logger.js';
 import { config } from './config.js';
 import { runTestsAndHeal } from './test-runner.js';
 import { updateProjectItemStatus } from './github-project.js';
-import { insertPR, updateTaskStatus } from './db.js';
+import { insertPR, updateTaskStatus, markCommentProcessed } from './db.js';
 import { sendTaskCompletionNotification, sendTaskFailureNotification } from './report.js';
+import { notifyTaskStart, notifyTaskDone, notifyTaskError } from './notifier.js';
 
 // Lazy-loaded WebSocket module
 let _wsModule = null;
@@ -32,6 +33,7 @@ export async function processTask(task) {
     title: task.title,
     repo: task.repo || 'unknown/repo',
   });
+  notifyTaskStart(task.id, task.title);
 
   const repoName = task.repo || 'unknown/repo';
   const repoDir = path.join(config.workspaceDir, repoName.replace('/', '-'));
@@ -108,6 +110,16 @@ export async function processTask(task) {
       geminiArgs.push('-y');
       logger.info('YOLO mode enabled - AI will auto-fix autonomously', task.id);
     }
+
+    // Log the prompt being sent to AI
+    logger.info(`\n${'─'.repeat(80)}`);
+    logger.info(`🤖 SENDING TASK PROMPT TO GEMINI CLI:`);
+    logger.info(`${'─'.repeat(80)}`);
+    logger.info(prompt);
+    logger.info(`${'─'.repeat(80)}`);
+    logger.info(`📋 Gemini CLI Args: ${JSON.stringify(geminiArgs.slice(0, 2))}${geminiArgs.length > 2 ? ' + additional flags' : ''}`);
+    logger.info(`${'─'.repeat(80)}\n`);
+
     await execa('gemini', geminiArgs, { cwd: repoDir, stdio: 'inherit' });
 
     // 3. PR Creation & Assignment
@@ -166,6 +178,7 @@ export async function processTask(task) {
     await updateProjectItemStatus(task, 'code review');
 
     broadcast('task:done', { taskId: task.id, prNumber: prNumber ? parseInt(prNumber) : null });
+    notifyTaskDone(task.id, task.title);
 
     // Send WhatsApp notification
     await sendTaskCompletionNotification(task, prNumber);
@@ -175,6 +188,7 @@ export async function processTask(task) {
   } catch (error) {
     logger.error(`Error processing task ${task.id}: ${error.message}`, task.id);
     broadcast('task:error', { taskId: task.id, error: error.message });
+    notifyTaskError(task.id, error.message);
 
     // Send WhatsApp failure notification
     await sendTaskFailureNotification(task, error.message);
@@ -186,6 +200,8 @@ export async function processTask(task) {
 
 export async function processRejectedPR(pr) {
   logger.info(`Starting self-fix execution for PR: #${pr.number} - ${pr.title}`);
+  logger.info(`Total comments to process: ${pr.unprocessedComments?.length || 0} unprocessed out of ${pr.totalComments || 0} total`);
+  notifyTaskStart(`PR-${pr.number}`, `Fixing Reject PR: ${pr.title}`);
 
   const repoName = pr.repository?.nameWithOwner || pr.repo || 'unknown/repo';
   const repoDir = path.join(config.workspaceDir, repoName.replace('/', '-'));
@@ -193,7 +209,7 @@ export async function processRejectedPR(pr) {
 
   if (config.dryRun) {
     logger.info(`[DRY RUN] Would checkout PR branch ${branchName}`);
-    logger.info(`[DRY RUN] Would ask AI to fix issues based on comments: \n${pr.comments.join('\n')}`);
+    logger.info(`[DRY RUN] Would process ${pr.unprocessedComments?.length || 0} comments one by one`);
     logger.info(`[DRY RUN] Would commit, push, and comment on PR #${pr.number} to request re-review`);
     return;
   }
@@ -219,33 +235,87 @@ export async function processRejectedPR(pr) {
     // 2. Fetch diff to provide context for fixing
     const { stdout: diff } = await execa('gh', ['pr', 'diff', pr.number.toString(), '--repo', repoName]);
 
-    // 3. Task Execution (Self-fixing AI Processing)
-    logger.info('Calling AI to fix PR issues...');
+    // 3. Load instructions once
     const instructions = await fs.readFile('agents.md', 'utf-8');
 
-    const combinedComments = pr.comments.join('\n---\n');
-    const prompt = `You are an AI Developer fixing a rejected Pull Request.
-    
-The reviewer has requested the following changes:
-${combinedComments}
+    // 4. Process each unprocessed comment one by one
+    const unprocessedComments = pr.unprocessedComments || [];
+    let processedCount = 0;
+    let failedCount = 0;
 
-Here is the current diff of the PR:
+    for (let i = 0; i < unprocessedComments.length; i++) {
+      const comment = unprocessedComments[i];
+      const commentNum = i + 1;
+
+      logger.info(`\n${'='.repeat(60)}`);
+      logger.info(`Processing comment ${commentNum}/${unprocessedComments.length}`);
+      logger.info(`Type: ${comment.comment_type}`);
+      if (comment.file_path) {
+        logger.info(`File: ${comment.file_path}:${comment.line_number || '?'}`);
+      }
+      logger.info(`${'='.repeat(60)}\n`);
+
+      try {
+        // Build context-specific prompt for this comment
+        let commentContext = '';
+        if (comment.comment_type === 'inline' && comment.file_path) {
+          commentContext = `\n[File: ${comment.file_path}, Line: ${comment.line_number || 'N/A'}]`;
+        } else if (comment.comment_type === 'review') {
+          commentContext = '\n[General Review Comment]';
+        }
+
+        const prompt = `You are an AI Developer fixing a rejected Pull Request.
+
+This is comment ${commentNum} of ${unprocessedComments.length} that needs to be addressed.
+
+${commentContext}
+Reviewer's feedback:
+${comment.comment_body}
+
+Current PR diff for context:
 ${diff}
 
 Guidelines:
 ${instructions}
 
-Please implement the requested changes and modify the files directly in the workspace to fix the issues requested by the reviewers.`;
+Please implement the requested changes and modify the files directly in the workspace to fix this specific issue.
+Focus ONLY on addressing this particular comment. Be precise and minimal in your changes.`;
 
-    const geminiArgs = ['-p', prompt];
-    if (config.geminiYolo) {
-      geminiArgs.push('-y');
-      logger.info('YOLO mode enabled - AI will auto-fix autonomously');
+        const geminiArgs = ['-p', prompt];
+        if (config.geminiYolo) {
+          geminiArgs.push('-y');
+        }
+
+        // Log the prompt being sent to AI
+        logger.info(`\n${'─'.repeat(80)}`);
+        logger.info(`🤖 SENDING PROMPT TO GEMINI CLI:`);
+        logger.info(`${'─'.repeat(80)}`);
+        logger.info(prompt);
+        logger.info(`${'─'.repeat(80)}`);
+        logger.info(`📋 Gemini CLI Args: ${JSON.stringify(geminiArgs.slice(0, 2))}${geminiArgs.length > 2 ? ' + additional flags' : ''}`);
+        logger.info(`${'─'.repeat(80)}\n`);
+
+        logger.info(`Calling AI to fix comment ${commentNum}...`);
+        await execa('gemini', geminiArgs, { cwd: repoDir, stdio: 'inherit' });
+
+        // Mark this comment as processed in database
+        markCommentProcessed(comment.id);
+        processedCount++;
+        logger.info(`✓ Comment ${commentNum} processed successfully`);
+
+      } catch (error) {
+        logger.error(`✗ Failed to process comment ${commentNum}: ${error.message}`);
+        failedCount++;
+        // Continue with next comment even if this one fails
+      }
     }
-    await execa('gemini', geminiArgs, { cwd: repoDir, stdio: 'inherit' });
 
-    // 4. PR Update (Commit, Push, Comment)
-    logger.info('Committing fixes...');
+    logger.info(`\n${'='.repeat(60)}`);
+    logger.info(`Processing complete: ${processedCount} succeeded, ${failedCount} failed`);
+    logger.info(`${'='.repeat(60)}\n`);
+
+    // 5. After all comments processed, commit and push once
+    logger.info('Committing all fixes...');
     await execa('git', ['add', '.'], { cwd: repoDir, stdio: 'inherit' });
 
     const { stdout: status } = await execa('git', ['status', '--porcelain'], { cwd: repoDir });
@@ -258,10 +328,11 @@ Please implement the requested changes and modify the files directly in the work
     }
 
     if (status) {
-      await execa('git', ['commit', '-m', `fix: address reviewer comments in PR #${pr.number}`], { cwd: repoDir, stdio: 'inherit' });
+      const commitMsg = `fix: address ${processedCount} reviewer comment${processedCount !== 1 ? 's' : ''} in PR #${pr.number}`;
+      await execa('git', ['commit', '-m', commitMsg], { cwd: repoDir, stdio: 'inherit' });
     }
 
-    // 5. Pre-PR Verification
+    // 6. Pre-PR Verification
     const verificationOk = await runTestsAndHeal(repoDir, config);
     if (!verificationOk) {
       logger.warn(`Verification failed for fixing PR #${pr.number}. Still pushing but it may need human intervention.`);
@@ -285,9 +356,10 @@ Please implement the requested changes and modify the files directly in the work
       logger.warn(`Failed to re-request review: ${e.message}`);
     });
 
+    const commentBody = `✅ Automated fix applied. I've addressed ${processedCount} review comment${processedCount !== 1 ? 's' : ''} and re-requested your review @${config.reviewerHandle}. Please check the latest commits!`;
     await execa('gh', [
       'pr', 'comment', pr.number.toString(),
-      '--body', `✅ Automated fix applied. I've addressed the review comments and re-requested your review @${config.reviewerHandle}. Please check the latest commits!`,
+      '--body', commentBody,
       '--repo', repoName
     ], { cwd: repoDir, stdio: 'inherit' });
 
@@ -302,10 +374,12 @@ Please implement the requested changes and modify the files directly in the work
     });
 
     logger.info(`Successfully updated PR #${pr.number} and re-requested review`);
+    notifyTaskDone(`PR-${pr.number}`, `PR Fix completed.`);
     return true; // Mark as successfully revised PR
 
   } catch (error) {
     logger.error(`Error processing rejected PR #${pr.number}: ${error.message}`);
+    notifyTaskError(`PR-${pr.number}`, `Failed to fix PR: ${error.message}`);
     return false;
   }
 }

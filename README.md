@@ -12,6 +12,8 @@
 - ✅ **AI-Powered Development** - Uses Gemini AI to implement features
 - ✅ **Automated PR Creation** - Creates PRs with proper formatting and reviewers
 - ✅ **Self-Healing** - Automatically fixes rejected PRs based on review comments
+- ✅ **Incremental Comment Processing** - Processes PR review comments one by one to avoid overload
+- ✅ **Real-time PR Dashboard** - Visual progress tracking for comment processing in web UI
 - ✅ **Test & Heal** - Runs tests and auto-fixes issues before creating PRs
 - ✅ **WhatsApp Notifications** - Daily standup reports and task notifications
 - ✅ **Real-time Dashboard** - Web UI with live updates via WebSocket
@@ -231,6 +233,9 @@ See [QUICK-REFERENCE.md](QUICK-REFERENCE.md) for more troubleshooting tips.
 
 ## 📚 Documentation
 
+- [PR-COMMENTS-UI-FINAL.md](PR-COMMENTS-UI-FINAL.md) - **Complete UI implementation guide**
+- [PR-COMMENT-INCREMENTAL-PROCESSING.md](PR-COMMENT-INCREMENTAL-PROCESSING.md) - Incremental PR comment processing
+- [PR-COMMENTS-UI-GUIDE.md](PR-COMMENTS-UI-GUIDE.md) - Frontend UI for PR comments
 - [PERFORMANCE-AND-BUG-FIXES.md](PERFORMANCE-AND-BUG-FIXES.md) - Detailed analysis of 15 issues and fixes
 - [IMPLEMENTATION-GUIDE.md](IMPLEMENTATION-GUIDE.md) - Step-by-step implementation guide
 - [FIXES-SUMMARY.md](FIXES-SUMMARY.md) - Executive summary of improvements

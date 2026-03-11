@@ -64,8 +64,26 @@ This release focuses on fixing critical bugs, improving performance, and adding 
 - ✅ `scripts/apply-critical-fixes.sh` - Quick fix script for immediate deployment
 
 ### Fixed
+- 🐛 **PR Comment Overload** - No longer send all comments at once to Gemini CLI
+- 🐛 **Duplicate Processing** - Comments are only processed once
+- 🐛 **Lost Context** - Each comment gets focused context
 
-#### Critical Issues
+### Improved
+- ⚡ **Better AI Focus** - One comment at a time = better fixes
+- ⚡ **Resumable** - Can continue from last processed comment if interrupted
+- ⚡ **Efficient** - Don't re-process already fixed comments
+- 🎨 **Real-time UI** - Visual progress tracking in web dashboard
+- 📊 **Better Monitoring** - Comment-level progress visibility
+
+## [2.0.0] - 2024-12-XX
+
+### 🎉 Major Release - Performance & Reliability Improvements
+
+This release focuses on fixing critical bugs, improving performance, and adding comprehensive monitoring.
+
+### Added
+
+#### Core Features
 1. ✅ **Race Condition in Worker** - Tasks could be processed twice
 2. ✅ **Database Transaction Missing** - Data corruption risk
 3. ✅ **Memory Leak in WebSocket** - Eventual crash

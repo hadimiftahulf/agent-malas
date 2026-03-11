@@ -101,6 +101,21 @@ export function initDb() {
       prs_revised INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS pr_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pr_url TEXT NOT NULL,
+      comment_id TEXT NOT NULL,
+      comment_type TEXT NOT NULL,
+      comment_body TEXT,
+      file_path TEXT,
+      line_number INTEGER,
+      review_id INTEGER,
+      processed BOOLEAN DEFAULT 0,
+      processed_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(pr_url, comment_id)
+    );
+
     -- Performance indexes
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_repo ON tasks(repo);
@@ -108,6 +123,8 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_task_logs_task_id ON task_logs(task_id);
     CREATE INDEX IF NOT EXISTS idx_prs_status ON prs(status);
     CREATE INDEX IF NOT EXISTS idx_prs_task_id ON prs(task_id);
+    CREATE INDEX IF NOT EXISTS idx_pr_comments_pr_url ON pr_comments(pr_url);
+    CREATE INDEX IF NOT EXISTS idx_pr_comments_processed ON pr_comments(processed);
   `);
 
   // Pre-compile frequently used prepared statements
@@ -140,6 +157,13 @@ export function initDb() {
   stmtCache.getPRByUrl = db.prepare('SELECT * FROM prs WHERE url = ?');
   stmtCache.getDailyMetrics = db.prepare('SELECT * FROM daily_metrics ORDER BY date DESC LIMIT ?');
   stmtCache.getTodayMetrics = db.prepare('SELECT * FROM daily_metrics WHERE date = ?');
+  stmtCache.insertPRComment = db.prepare(`
+    INSERT OR IGNORE INTO pr_comments (pr_url, comment_id, comment_type, comment_body, file_path, line_number, review_id)
+    VALUES (@prUrl, @commentId, @commentType, @commentBody, @filePath, @lineNumber, @reviewId)
+  `);
+  stmtCache.getUnprocessedComments = db.prepare('SELECT * FROM pr_comments WHERE pr_url = ? AND processed = 0 ORDER BY created_at ASC');
+  stmtCache.markCommentProcessed = db.prepare('UPDATE pr_comments SET processed = 1, processed_at = CURRENT_TIMESTAMP WHERE id = ?');
+  stmtCache.getProcessedCommentCount = db.prepare('SELECT COUNT(*) as count FROM pr_comments WHERE pr_url = ? AND processed = 1');
 
   return db;
 }
@@ -317,5 +341,116 @@ export function getTodayMetrics() {
     tasks_failed: 0,
     prs_created: 0,
     prs_revised: 0,
+  };
+}
+
+// ─── PR Comments Management ───────────────────────────────────────
+
+/**
+ * Insert a new PR comment into the database
+ * @param {Object} comment - Comment object
+ * @param {string} comment.prUrl - PR URL
+ * @param {string} comment.commentId - Unique comment ID
+ * @param {string} comment.commentType - Type: 'review' | 'inline' | 'general'
+ * @param {string} comment.commentBody - Comment text
+ * @param {string} [comment.filePath] - File path for inline comments
+ * @param {number} [comment.lineNumber] - Line number for inline comments
+ * @param {number} [comment.reviewId] - Review ID
+ */
+export function insertPRComment(comment) {
+  return stmtCache.insertPRComment.run({
+    prUrl: comment.prUrl,
+    commentId: comment.commentId,
+    commentType: comment.commentType,
+    commentBody: comment.commentBody,
+    filePath: comment.filePath || null,
+    lineNumber: comment.lineNumber || null,
+    reviewId: comment.reviewId || null
+  });
+}
+
+/**
+ * Get all unprocessed comments for a PR
+ * @param {string} prUrl - PR URL
+ * @returns {Array} Array of unprocessed comments
+ */
+export function getUnprocessedComments(prUrl) {
+  return stmtCache.getUnprocessedComments.all(prUrl);
+}
+
+/**
+ * Mark a comment as processed
+ * @param {number} commentId - Comment database ID
+ */
+export function markCommentProcessed(commentId) {
+  return stmtCache.markCommentProcessed.run(commentId);
+}
+
+/**
+ * Get count of processed comments for a PR
+ * @param {string} prUrl - PR URL
+ * @returns {number} Count of processed comments
+ */
+export function getProcessedCommentCount(prUrl) {
+  const result = stmtCache.getProcessedCommentCount.get(prUrl);
+  return result?.count || 0;
+}
+
+/**
+ * Batch insert multiple PR comments
+ * @param {Array} comments - Array of comment objects
+ */
+export function insertPRCommentsBatch(comments) {
+  const insertMany = db.transaction((comments) => {
+    for (const comment of comments) {
+      insertPRComment(comment);
+    }
+  });
+  return insertMany(comments);
+}
+/**
+ * Get all comments for a PR URL
+ * @param {string} prUrl - PR URL
+ * @returns {Array} Array of all comments
+ */
+export function getAllPRComments(prUrl) {
+  return db.prepare(`
+    SELECT 
+      id,
+      comment_id,
+      comment_type,
+      comment_body,
+      file_path,
+      line_number,
+      review_id,
+      processed,
+      processed_at,
+      created_at
+    FROM pr_comments 
+    WHERE pr_url = ? 
+    ORDER BY created_at ASC
+  `).all(prUrl);
+}
+
+/**
+ * Get comment statistics for a PR URL
+ * @param {string} prUrl - PR URL
+ * @returns {Object} Statistics object
+ */
+export function getPRCommentStats(prUrl) {
+  const result = db.prepare(`
+    SELECT 
+      COUNT(*) as total,
+      SUM(CASE WHEN processed = 1 THEN 1 ELSE 0 END) as processed,
+      SUM(CASE WHEN processed = 0 THEN 1 ELSE 0 END) as unprocessed
+    FROM pr_comments 
+    WHERE pr_url = ?
+  `).get(prUrl);
+
+  return {
+    total: result.total || 0,
+    processed: result.processed || 0,
+    unprocessed: result.unprocessed || 0,
+    progress: result.total > 0 ? Math.round(((result.processed || 0) / result.total) * 100) : 0
   };
 }

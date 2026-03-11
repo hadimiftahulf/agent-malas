@@ -12,6 +12,7 @@ import { insertPR, updateTaskStatus } from './db.js';
 import { sendTaskCompletionNotification, sendTaskFailureNotification } from './report.js';
 import { retryGitOperation, retryGitHubAPI, withTimeout } from './retry-helper.js';
 import { acquireTaskLock, releaseTaskLock } from './db-transactions.js';
+import { notifyTaskStart, notifyTaskDone, notifyTaskError } from './notifier.js';
 
 let _wsModule = null;
 function broadcast(event, data) {
@@ -112,6 +113,7 @@ export async function processTask(task) {
         title: task.title,
         repo: task.repo || 'unknown/repo',
     });
+    notifyTaskStart(task.id, task.title);
 
     const repoName = task.repo || 'unknown/repo';
     const repoDir = path.join(config.workspaceDir, repoName.replace('/', '-'));
@@ -303,6 +305,7 @@ export async function processTask(task) {
         });
 
         broadcast('task:done', { taskId: task.id, prNumber: prNumber ? parseInt(prNumber) : null });
+        notifyTaskDone(task.id, task.title);
 
         // Send notification
         await sendTaskCompletionNotification(task, prNumber).catch(err => {
@@ -317,6 +320,7 @@ export async function processTask(task) {
         logger.error(error.stack, task.id);
 
         broadcast('task:error', { taskId: task.id, error: error.message });
+        notifyTaskError(task.id, error.message);
 
         // Update task status to failed
         updateTaskStatus(String(task.id), 'failed', {
@@ -340,6 +344,7 @@ export async function processTask(task) {
  */
 export async function processRejectedPR(pr) {
     logger.info(`Starting self-fix execution for PR: #${pr.number} - ${pr.title}`);
+    notifyTaskStart(`PR-${pr.number}`, `Fixing Reject PR: ${pr.title}`);
 
     const repoName = pr.repository?.nameWithOwner || pr.repo || 'unknown/repo';
     const repoDir = path.join(config.workspaceDir, repoName.replace('/', '-'));
@@ -408,6 +413,15 @@ Please implement the requested changes and modify the files directly in the work
         if (config.geminiYolo) {
             geminiArgs.push('-y');
         }
+
+        // Log the prompt being sent to AI
+        logger.info(`\n${'─'.repeat(80)}`);
+        logger.info(`🤖 SENDING PROMPT TO GEMINI CLI:`);
+        logger.info(`${'─'.repeat(80)}`);
+        logger.info(prompt);
+        logger.info(`${'─'.repeat(80)}`);
+        logger.info(`📋 Gemini CLI Args: ${JSON.stringify(geminiArgs.slice(0, 2))}${geminiArgs.length > 2 ? ' + additional flags' : ''}`);
+        logger.info(`${'─'.repeat(80)}\n`);
 
         await withTimeout(
             () => execa('gemini', geminiArgs, { cwd: repoDir, stdio: 'inherit' }),
@@ -479,11 +493,13 @@ Please implement the requested changes and modify the files directly in the work
         });
 
         logger.info(`✅ Successfully updated PR #${pr.number}`);
+        notifyTaskDone(`PR-${pr.number}`, `PR Fix completed.`);
         return true;
 
     } catch (error) {
         logger.error(`❌ Error processing rejected PR #${pr.number}: ${error.message}`);
         logger.error(error.stack);
+        notifyTaskError(`PR-${pr.number}`, `Failed to fix PR: ${error.message}`);
         return false;
     }
 }

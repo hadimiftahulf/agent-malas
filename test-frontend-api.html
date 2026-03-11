@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test Frontend API</title>
+</head>
+
+<body>
+    <h1>Test Frontend API</h1>
+    <button onclick="testAPI()">Test /api/prs</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testAPI() {
+            try {
+                const response = await fetch('http://localhost:3001/api/prs');
+                const data = await response.json();
+
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+
+                console.log('API Response:', data);
+                console.log('First PR commentStats:', data.data[0]?.commentStats);
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+                console.error('API Error:', error);
+            }
+        }
+
+        // Auto test on load
+        testAPI();
+    </script>
+</body>
+
+</html>

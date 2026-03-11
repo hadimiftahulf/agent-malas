@@ -4,6 +4,107 @@ import { getTodayMetrics, getTasks, getPRs } from './db.js';
 import axios from 'axios';
 
 /**
+ * Helper function to get all WhatsApp targets (individual + groups)
+ */
+function getAllWhatsAppTargets() {
+  const targets = [];
+
+  // Legacy single target
+  if (config.whatsappTarget) {
+    targets.push(config.whatsappTarget);
+  }
+
+  // Multiple individual targets
+  if (config.whatsappTargets) {
+    const multipleTargets = config.whatsappTargets.split(',').map(t => t.trim()).filter(t => t);
+    targets.push(...multipleTargets);
+  }
+
+  // Group targets
+  if (config.whatsappGroups) {
+    const groupTargets = config.whatsappGroups.split(',').map(t => t.trim()).filter(t => t);
+    targets.push(...groupTargets);
+  }
+
+  // Remove duplicates
+  return [...new Set(targets)];
+}
+
+/**
+ * Enhanced function to send WhatsApp message to multiple targets
+ */
+async function sendWhatsAppMessage(message, options = {}) {
+  if (!config.fontteToken) {
+    logger.warn('FONNTE_TOKEN is missing. Cannot send WhatsApp message.');
+    return { success: false, error: 'Missing FONTTE_TOKEN' };
+  }
+
+  const targets = getAllWhatsAppTargets();
+
+  if (targets.length === 0) {
+    logger.warn('No WhatsApp targets configured. Set WHATSAPP_TARGET, WHATSAPP_TARGETS, or WHATSAPP_GROUPS.');
+    return { success: false, error: 'No targets configured' };
+  }
+
+  const results = [];
+
+  for (const target of targets) {
+    try {
+      logger.info(`Sending WhatsApp message to ${target}...`);
+
+      const payload = {
+        target: target,
+        message: message,
+        countryCode: '62',
+        ...options
+      };
+
+      const response = await axios.post('https://api.fonnte.com/send', payload, {
+        headers: {
+          'Authorization': config.fontteToken
+        }
+      });
+
+      results.push({
+        target,
+        success: true,
+        response: response.data
+      });
+
+      logger.info(`✅ Message sent successfully to ${target}`);
+
+      // Small delay between messages to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+    } catch (error) {
+      logger.error(`❌ Failed to send message to ${target}: ${error.message}`);
+
+      results.push({
+        target,
+        success: false,
+        error: error.message,
+        response: error.response?.data
+      });
+    }
+  }
+
+  const successCount = results.filter(r => r.success).length;
+  const totalCount = results.length;
+
+  logger.info(`WhatsApp broadcast complete: ${successCount}/${totalCount} messages sent successfully`);
+
+  return {
+    success: successCount > 0,
+    results,
+    summary: {
+      total: totalCount,
+      success: successCount,
+      failed: totalCount - successCount
+    }
+  };
+}
+
+/**
  * Sends a detailed daily standup to WhatsApp using Fontte API
  */
 export async function sendDailyStandup() {

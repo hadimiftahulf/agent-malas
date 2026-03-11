@@ -3,6 +3,8 @@ import { config } from '../config.js';
 import {
   getTasks, getTask, getLogs, getRecentLogs,
   getPRs, getDailyMetrics, getTodayMetrics,
+  getUnprocessedComments, getProcessedCommentCount,
+  getAllPRComments, getPRCommentStats
 } from '../db.js';
 import { getAgentState } from '../agent-state.js';
 
@@ -132,9 +134,84 @@ apiRouter.get('/reports', (req, res) => {
 // ─── GET /api/prs ────────────────────────────────────────
 
 apiRouter.get('/prs', (req, res) => {
-  const { status, limit, offset } = req.query;
-  const result = getPRs({ status, limit, offset });
-  res.json(result);
+  try {
+    const { status, limit, offset } = req.query;
+    const result = getPRs({ status, limit, offset });
+
+    // Enrich PRs with comment stats
+    const enrichedPRs = result.data.map(pr => {
+      if (pr.url) {
+        try {
+          const unprocessedComments = getUnprocessedComments(pr.url);
+          const processedCount = getProcessedCommentCount(pr.url);
+          const totalComments = unprocessedComments.length + processedCount;
+
+          return {
+            ...pr,
+            commentStats: {
+              total: totalComments,
+              processed: processedCount,
+              unprocessed: unprocessedComments.length,
+              progress: totalComments > 0 ? Math.round((processedCount / totalComments) * 100) : 0
+            }
+          };
+        } catch (commentError) {
+          console.error(`Error getting comment stats for PR ${pr.id}:`, commentError);
+          return pr; // Return PR without commentStats if error
+        }
+      }
+      return pr;
+    });
+
+    res.json({ ...result, data: enrichedPRs });
+  } catch (error) {
+    console.error('Error in /api/prs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── GET /api/prs/:prId/comments ─────────────────────────
+
+apiRouter.get('/prs/:prId/comments', (req, res) => {
+  const { prId } = req.params;
+
+  // Find PR by ID to get URL
+  const allPRs = getPRs({ limit: 1000 });
+  const pr = allPRs.data.find(p => p.id == prId);
+
+  if (!pr || !pr.url) {
+    return res.status(404).json({ error: 'PR not found or no URL available' });
+  }
+
+  try {
+    // Get all comments and stats using helper functions
+    const comments = getAllPRComments(pr.url);
+    const stats = getPRCommentStats(pr.url);
+
+    res.json({
+      pr: {
+        id: pr.id,
+        title: pr.title,
+        url: pr.url,
+        repo: pr.repo
+      },
+      stats,
+      comments: comments.map(c => ({
+        id: c.id,
+        commentId: c.comment_id,
+        type: c.comment_type,
+        body: c.comment_body,
+        filePath: c.file_path,
+        lineNumber: c.line_number,
+        reviewId: c.review_id,
+        processed: Boolean(c.processed),
+        processedAt: c.processed_at,
+        createdAt: c.created_at
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ─── GET /api/prs/stats ──────────────────────────────────
@@ -175,9 +252,9 @@ apiRouter.get('/config', (req, res) => {
 apiRouter.post('/config', (req, res) => {
   const updates = req.body;
   if (updates.checkInterval !== undefined) config.checkInterval = parseInt(updates.checkInterval) || 600;
-  if (updates.dryRun !== undefined)        config.dryRun = Boolean(updates.dryRun);
-  if (updates.geminiYolo !== undefined)    config.geminiYolo = Boolean(updates.geminiYolo);
-  if (updates.logLevel !== undefined)      config.logLevel = updates.logLevel;
+  if (updates.dryRun !== undefined) config.dryRun = Boolean(updates.dryRun);
+  if (updates.geminiYolo !== undefined) config.geminiYolo = Boolean(updates.geminiYolo);
+  if (updates.logLevel !== undefined) config.logLevel = updates.logLevel;
   res.json({ success: true, config: { checkInterval: config.checkInterval, dryRun: config.dryRun, geminiYolo: config.geminiYolo } });
 });
 

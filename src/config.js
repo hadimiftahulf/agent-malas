@@ -11,5 +11,7 @@ export const config = {
   geminiYolo: process.env.GEMINI_YOLO === 'true',
   fontteToken: process.env.FONTTE_TOKEN,
   whatsappTarget: process.env.WHATSAPP_TARGET,
+  whatsappTargets: process.env.WHATSAPP_TARGETS, // New: multiple targets (comma-separated)
+  whatsappGroups: process.env.WHATSAPP_GROUPS,   // New: group targets (comma-separated)
   apiPort: parseInt(process.env.API_PORT || '3001', 10),
 };
