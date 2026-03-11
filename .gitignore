@@ -90,3 +90,20 @@ test-*.js
 .nuxt/
 .vercel
 .netlify
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_*.png
+*.iml
+*.symbols
+*.jks
+*.keystore
+
+# Temporary Scratch Files
+*.prompt.md
