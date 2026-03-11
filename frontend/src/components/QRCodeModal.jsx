@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { useServerInfo } from '../hooks/useServerInfo';
 
@@ -13,6 +14,11 @@ import { useServerInfo } from '../hooks/useServerInfo';
  */
 export function QRCodeModal({ isOpen, onClose }) {
     const { serverInfo, loading, error, refresh } = useServerInfo();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Auto-refresh every 30 seconds when modal is open
     useEffect(() => {
@@ -22,8 +28,8 @@ export function QRCodeModal({ isOpen, onClose }) {
         }
     }, [isOpen, refresh]);
 
-    // Don't render if modal is not open
-    if (!isOpen) {
+    // Don't render if modal is not open or not mounted yet (for SSR safety)
+    if (!isOpen || !mounted) {
         return null;
     }
 
@@ -35,7 +41,7 @@ export function QRCodeModal({ isOpen, onClose }) {
         timestamp: serverInfo.timestamp
     }) : null;
 
-    return (
+    const modalContent = (
         <div
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-opacity"
             onClick={onClose}
@@ -163,4 +169,6 @@ export function QRCodeModal({ isOpen, onClose }) {
             </div>
         </div>
     );
+
+    return createPortal(modalContent, document.body);
 }
