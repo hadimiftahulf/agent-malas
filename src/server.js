@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { apiRouter } from './routes/api.js';
+import { serverInfoRouter } from './routes/server-info.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -14,6 +15,7 @@ app.use(express.json());
 
 // API routes
 app.use('/api', apiRouter);
+app.use('/api/server-info', serverInfoRouter);
 
 // Serve static files from frontend build (production)
 const staticDir = path.join(__dirname, '..', 'frontend', 'dist');

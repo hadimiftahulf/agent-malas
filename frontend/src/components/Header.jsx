@@ -1,6 +1,8 @@
-import { Menu, Activity, Clock, Cpu, Bell } from 'lucide-react';
+import { useState } from 'react';
+import { Menu, Activity, Clock, Cpu, Bell, Smartphone } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useApprovalNotifications } from '../hooks/useApprovalNotifications';
+import { QRCodeModal } from './QRCodeModal';
 
 const statusConfig = {
   running: { bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Running', dot: '16, 185, 129', dotClass: 'bg-emerald-500' },
@@ -29,6 +31,7 @@ export function Header({ health, onMenuToggle, onNavigate }) {
   const status = statusConfig[health?.agent] || statusConfig.stopped;
   const isPulsing = health?.agent === 'running' || health?.agent === 'processing';
   const { pendingCount } = useApprovalNotifications();
+  const [showQRModal, setShowQRModal] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 shrink-0 h-[68px] glass-panel border-b border-slate-200/60 flex items-center justify-between px-5 sm:px-8 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
@@ -100,7 +103,23 @@ export function Header({ health, onMenuToggle, onNavigate }) {
             </>
           )}
         </button>
+
+        {/* Connect Mobile App Button */}
+        <button
+          onClick={() => setShowQRModal(true)}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-[12px] font-semibold transition-all active:scale-95 shadow-sm"
+          title="Connect Mobile App"
+        >
+          <Smartphone size={16} />
+          <span className="hidden sm:inline">Connect Mobile App</span>
+        </button>
       </div>
+
+      {/* QR Code Modal */}
+      <QRCodeModal
+        isOpen={showQRModal}
+        onClose={() => setShowQRModal(false)}
+      />
     </header>
   );
 }
