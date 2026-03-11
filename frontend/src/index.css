@@ -17,16 +17,30 @@ html {
 }
 
 body {
-  background-color: #EAEFF5; /* Slightly darker for contrast against white content panel */
+  background-color: #EAEFF5;
+  /* Slightly darker for contrast against white content panel */
   color: #0F172A;
   min-height: 100vh;
 }
 
 /* ─── Scrollbar ─── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
 
 /* ─── Premium Card ─── */
 .premium-card {
@@ -55,16 +69,19 @@ body {
   color: #047857;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
+
 .stat-icon-rose {
   background: linear-gradient(135deg, #FFE4E6 0%, #FDA4AF 100%);
   color: #BE123C;
   box-shadow: 0 4px 12px rgba(244, 63, 94, 0.2);
 }
+
 .stat-icon-indigo {
   background: linear-gradient(135deg, #E0E7FF 0%, #A5B4FC 100%);
   color: #3730A3;
   box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
 }
+
 .stat-icon-amber {
   background: linear-gradient(135deg, #FEF3C7 0%, #FCD34D 100%);
   color: #B45309;
@@ -80,30 +97,56 @@ body {
 
 /* ─── Pulse Animation ─── */
 @keyframes pulse-ring {
-  0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), 0.4); }
-  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(var(--pulse-rgb), 0); }
-  100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), 0); }
+  0% {
+    transform: scale(0.8);
+    box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), 0.4);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(var(--pulse-rgb), 0);
+  }
+
+  100% {
+    transform: scale(0.8);
+    box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), 0);
+  }
 }
+
 .status-dot-animated {
   animation: pulse-ring 2s infinite;
 }
 
 /* ─── Smooth fade-in ─── */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
 .animate-fade-in {
   animation: fadeInUp 0.5s ease-out both;
 }
 
 /* ─── Shimmer Skeleton ─── */
 @keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
 }
+
 .shimmer {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
   animation: shimmer 1.5s infinite;
 }
 
@@ -121,30 +164,55 @@ body {
 }
 
 /* ─── Card Accent Border ─── */
-.card-accent-emerald { border-top: 3px solid #10B981; }
-.card-accent-rose { border-top: 3px solid #F43F5E; }
-.card-accent-indigo { border-top: 3px solid #6366F1; }
-.card-accent-amber { border-top: 3px solid #F59E0B; }
+.card-accent-emerald {
+  border-top: 3px solid #10B981;
+}
+
+.card-accent-rose {
+  border-top: 3px solid #F43F5E;
+}
+
+.card-accent-indigo {
+  border-top: 3px solid #6366F1;
+}
+
+.card-accent-amber {
+  border-top: 3px solid #F59E0B;
+}
 
 /* ─── Toast Slide In ─── */
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(100%); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
+
 .animate-slide-in-right {
   animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* ─── Toast Progress Bar Shrink ─── */
 @keyframes shrink {
-  from { width: 100%; }
-  to { width: 0%; }
+  from {
+    width: 100%;
+  }
+
+  to {
+    width: 0%;
+  }
 }
 
 /* ─── Micro-interactions ─── */
 button:not(:disabled) {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
+
 button:not(:disabled):active {
   transform: scale(0.97);
 }
@@ -158,3 +226,64 @@ button:not(:disabled):active {
   transition: transform 0.2s ease;
 }
 
+
+/* ─── Approval Notifications Animations ─── */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes bounceSlow {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-bounce-slow {
+  animation: bounceSlow 2s ease-in-out infinite;
+}
+
+/* ─── Gradient Border Animation ─── */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+}
+
+/* ─── Line Clamp Utilities ─── */
+.line-clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

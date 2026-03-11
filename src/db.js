@@ -68,7 +68,11 @@ export function initDb() {
       error_message TEXT,
       started_at DATETIME,
       completed_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      approval_status TEXT DEFAULT 'pending',
+      approved_by TEXT,
+      approved_at DATETIME,
+      rejection_reason TEXT
     );
 
     CREATE TABLE IF NOT EXISTS task_logs (
@@ -116,25 +120,52 @@ export function initDb() {
       UNIQUE(pr_url, comment_id)
     );
 
+    CREATE TABLE IF NOT EXISTS mobile_devices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT UNIQUE NOT NULL,
+      device_name TEXT,
+      ip_address TEXT,
+      last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_active BOOLEAN DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS approval_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      notification_type TEXT NOT NULL,
+      title TEXT,
+      description TEXT,
+      status TEXT DEFAULT 'pending',
+      sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      responded_at DATETIME,
+      response_by TEXT,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    );
+
     -- Performance indexes
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_repo ON tasks(repo);
     CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+    CREATE INDEX IF NOT EXISTS idx_tasks_approval_status ON tasks(approval_status);
     CREATE INDEX IF NOT EXISTS idx_task_logs_task_id ON task_logs(task_id);
     CREATE INDEX IF NOT EXISTS idx_prs_status ON prs(status);
     CREATE INDEX IF NOT EXISTS idx_prs_task_id ON prs(task_id);
     CREATE INDEX IF NOT EXISTS idx_pr_comments_pr_url ON pr_comments(pr_url);
     CREATE INDEX IF NOT EXISTS idx_pr_comments_processed ON pr_comments(processed);
+    CREATE INDEX IF NOT EXISTS idx_approval_notifications_status ON approval_notifications(status);
+    CREATE INDEX IF NOT EXISTS idx_approval_notifications_task_id ON approval_notifications(task_id);
+    CREATE INDEX IF NOT EXISTS idx_mobile_devices_active ON mobile_devices(is_active);
   `);
 
   // Pre-compile frequently used prepared statements
   stmtCache.insertTask = db.prepare(`
-    INSERT OR IGNORE INTO tasks (id, title, description, repo, project_name, status, base_branch, started_at)
-    VALUES (@id, @title, @description, @repo, @projectName, @status, @baseBranch, @startedAt)
+    INSERT OR IGNORE INTO tasks (id, title, description, repo, project_name, status, base_branch, started_at, approval_status)
+    VALUES (@id, @title, @description, @repo, @projectName, @status, @baseBranch, @startedAt, 'pending')
   `);
   stmtCache.upsertQueuedTask = db.prepare(`
-    INSERT INTO tasks (id, title, description, repo, project_name, status, started_at)
-    VALUES (@id, @title, @description, @repo, @projectName, 'queued', @startedAt)
+    INSERT INTO tasks (id, title, description, repo, project_name, status, started_at, approval_status)
+    VALUES (@id, @title, @description, @repo, @projectName, 'queued', @startedAt, 'pending')
     ON CONFLICT(id) DO UPDATE SET
       title = @title,
       description = @description,
@@ -164,6 +195,37 @@ export function initDb() {
   stmtCache.getUnprocessedComments = db.prepare('SELECT * FROM pr_comments WHERE pr_url = ? AND processed = 0 ORDER BY created_at ASC');
   stmtCache.markCommentProcessed = db.prepare('UPDATE pr_comments SET processed = 1, processed_at = CURRENT_TIMESTAMP WHERE id = ?');
   stmtCache.getProcessedCommentCount = db.prepare('SELECT COUNT(*) as count FROM pr_comments WHERE pr_url = ? AND processed = 1');
+
+  // Approval workflow statements
+  stmtCache.createApprovalNotification = db.prepare(`
+    INSERT INTO approval_notifications (task_id, notification_type, title, description)
+    VALUES (@taskId, @notificationType, @title, @description)
+  `);
+  stmtCache.getPendingApprovals = db.prepare(`
+    SELECT * FROM approval_notifications WHERE status = 'pending' ORDER BY sent_at DESC
+  `);
+  stmtCache.updateApprovalStatus = db.prepare(`
+    UPDATE approval_notifications 
+    SET status = @status, responded_at = CURRENT_TIMESTAMP, response_by = @responseBy
+    WHERE id = @id
+  `);
+  stmtCache.updateTaskApproval = db.prepare(`
+    UPDATE tasks 
+    SET approval_status = @approvalStatus, approved_by = @approvedBy, approved_at = CURRENT_TIMESTAMP, rejection_reason = @rejectionReason
+    WHERE id = @taskId
+  `);
+  stmtCache.registerMobileDevice = db.prepare(`
+    INSERT INTO mobile_devices (device_id, device_name, ip_address, last_seen)
+    VALUES (@deviceId, @deviceName, @ipAddress, CURRENT_TIMESTAMP)
+    ON CONFLICT(device_id) DO UPDATE SET
+      device_name = @deviceName,
+      ip_address = @ipAddress,
+      last_seen = CURRENT_TIMESTAMP,
+      is_active = 1
+  `);
+  stmtCache.getActiveMobileDevices = db.prepare(`
+    SELECT * FROM mobile_devices WHERE is_active = 1 ORDER BY last_seen DESC
+  `);
 
   return db;
 }
@@ -453,4 +515,101 @@ export function getPRCommentStats(prUrl) {
     unprocessed: result.unprocessed || 0,
     progress: result.total > 0 ? Math.round(((result.processed || 0) / result.total) * 100) : 0
   };
+}
+
+// ─── Approval Workflow ───────────────────────────────────────────
+
+/**
+ * Create approval notification for a task
+ */
+export function createApprovalNotification(taskId, notificationType, title, description) {
+  return stmtCache.createApprovalNotification.run({
+    taskId,
+    notificationType,
+    title,
+    description
+  });
+}
+
+/**
+ * Get all pending approval notifications
+ */
+export function getPendingApprovals() {
+  return stmtCache.getPendingApprovals.all();
+}
+
+/**
+ * Update approval notification status
+ */
+export function updateApprovalStatus(id, status, responseBy) {
+  return stmtCache.updateApprovalStatus.run({
+    id,
+    status,
+    responseBy
+  });
+}
+
+/**
+ * Update task approval status
+ */
+export function updateTaskApproval(taskId, approvalStatus, approvedBy, rejectionReason = null) {
+  return stmtCache.updateTaskApproval.run({
+    taskId,
+    approvalStatus,
+    approvedBy,
+    rejectionReason
+  });
+}
+
+/**
+ * Register or update mobile device
+ */
+export function registerMobileDevice(deviceId, deviceName, ipAddress) {
+  return stmtCache.registerMobileDevice.run({
+    deviceId,
+    deviceName,
+    ipAddress
+  });
+}
+
+/**
+ * Get all active mobile devices
+ */
+export function getActiveMobileDevices() {
+  return stmtCache.getActiveMobileDevices.all();
+}
+
+/**
+ * Get tasks pending approval
+ */
+export function getTasksPendingApproval() {
+  return db.prepare(`
+    SELECT * FROM tasks 
+    WHERE approval_status = 'pending' 
+    ORDER BY created_at DESC
+  `).all();
+}
+
+/**
+ * Get approval notification by task ID
+ */
+export function getApprovalNotificationByTaskId(taskId) {
+  return db.prepare(`
+    SELECT * FROM approval_notifications 
+    WHERE task_id = ? 
+    ORDER BY sent_at DESC 
+    LIMIT 1
+  `).get(taskId);
+}
+
+/**
+ * Check if there's already a pending notification for a task
+ */
+export function hasPendingNotification(taskId) {
+  const result = db.prepare(`
+    SELECT COUNT(*) as count 
+    FROM approval_notifications 
+    WHERE task_id = ? AND status = 'pending'
+  `).get(taskId);
+  return result.count > 0;
 }

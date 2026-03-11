@@ -8,7 +8,7 @@ import { logger } from './logger.js';
 import { config } from './config.js';
 import { runTestsAndHeal } from './test-runner.js';
 import { updateProjectItemStatus } from './github-project.js';
-import { insertPR, updateTaskStatus } from './db.js';
+import { insertPR, updateTaskStatus, markCommentProcessed } from './db.js';
 import { sendTaskCompletionNotification, sendTaskFailureNotification } from './report.js';
 import { retryGitOperation, retryGitHubAPI, withTimeout } from './retry-helper.js';
 import { acquireTaskLock, releaseTaskLock } from './db-transactions.js';
@@ -267,7 +267,7 @@ export async function processTask(task) {
         const prArgs = [
             'pr', 'create',
             '--title', `feat: ${task.title} (${task.id})`,
-            '--body', `Automated PR for task ${task.id}.\n\nDescription:\n${task.description}\n\nCloses #${task.id}`,
+            '--body', `Halo Kang @${config.reviewerHandle}, PR untuk task ${task.id} udah aku buatin ya.\n\n**Deskripsi:**\n${task.description}\n\nMonggo dicek dan direview ya Kang. Makasih! 🙏\n\nCloses #${task.id}`,
             '--reviewer', config.reviewerHandle,
             '--base', baseBranch,
             '--repo', repoName
@@ -351,7 +351,8 @@ export async function processRejectedPR(pr) {
     const branchName = pr.headRefName;
 
     if (config.dryRun) {
-        logger.info(`[DRY RUN] Would fix PR #${pr.number}`);
+        logger.info(`[DRY RUN] Would process PR #${pr.number} with atomic commits`);
+        logger.info(`[DRY RUN] Would create ${pr.unprocessedComments?.length || 0} individual commits, then push all at once`);
         return true;
     }
 
@@ -391,58 +392,247 @@ export async function processRejectedPR(pr) {
             return await execa('gh', ['pr', 'diff', pr.number.toString(), '--repo', repoName]);
         }, 'fetch PR diff');
 
-        // === PHASE 3: AI Fixing ===
-        logger.info('Calling AI to fix PR issues...');
+        // === PHASE 3: AI Fixing with Atomic Commits ===
+        logger.info('Processing comments with atomic commits...');
         const instructions = await fs.readFile('agents.md', 'utf-8');
 
-        const combinedComments = pr.comments.join('\n---\n');
-        const prompt = `You are an AI Developer fixing a rejected Pull Request.
-    
-The reviewer has requested the following changes:
-${combinedComments}
+        // Process each unprocessed comment one by one with atomic commits
+        const unprocessedComments = pr.unprocessedComments || [];
+        let processedCount = 0;
+        let failedCount = 0;
+        const commitHashes = []; // Track commits for potential rollback
 
-Here is the current diff of the PR:
+        for (let i = 0; i < unprocessedComments.length; i++) {
+            const comment = unprocessedComments[i];
+            const commentNum = i + 1;
+
+            logger.info(`\n${'='.repeat(60)}`);
+            logger.info(`Processing comment ${commentNum}/${unprocessedComments.length}`);
+            logger.info(`Type: ${comment.comment_type}`);
+            if (comment.file_path) {
+                logger.info(`File: ${comment.file_path}:${comment.line_number || '?'}`);
+            }
+            logger.info(`${'='.repeat(60)}\n`);
+
+            try {
+                // Build context-specific prompt for this comment
+                let commentContext = '';
+                if (comment.comment_type === 'inline' && comment.file_path) {
+                    commentContext = `\n[File: ${comment.file_path}, Line: ${comment.line_number || 'N/A'}]`;
+                } else if (comment.comment_type === 'review') {
+                    commentContext = '\n[General Review Comment]';
+                }
+
+                const prompt = `You are an AI Developer fixing a rejected Pull Request.
+
+This is comment ${commentNum} of ${unprocessedComments.length} that needs to be addressed.
+
+${commentContext}
+Reviewer's feedback:
+${comment.comment_body}
+
+Current PR diff for context:
 ${diff}
 
 Guidelines:
 ${instructions}
 
-Please implement the requested changes and modify the files directly in the workspace to fix the issues requested by the reviewers.`;
+Please implement the requested changes and modify the files directly in the workspace to fix this specific issue.
+Focus ONLY on addressing this particular comment. Be precise and minimal in your changes.`;
 
-        const geminiArgs = ['-p', prompt];
-        if (config.geminiYolo) {
-            geminiArgs.push('-y');
+                const geminiArgs = ['-p', prompt];
+                if (config.geminiYolo) {
+                    geminiArgs.push('-y');
+                }
+
+                // Log the prompt being sent to AI
+                logger.info(`\n${'─'.repeat(80)}`);
+                logger.info(`🤖 SENDING PROMPT TO GEMINI CLI:`);
+                logger.info(`${'─'.repeat(80)}`);
+                logger.info(prompt);
+                logger.info(`${'─'.repeat(80)}`);
+                logger.info(`📋 Gemini CLI Args: ${JSON.stringify(geminiArgs.slice(0, 2))}${geminiArgs.length > 2 ? ' + additional flags' : ''}`);
+                logger.info(`${'─'.repeat(80)}\n`);
+
+                logger.info(`Calling AI to fix comment ${commentNum}...`);
+
+                // Capture stdout and stderr for better debugging
+                const aiResult = await withTimeout(
+                    () => execa('gemini', geminiArgs, {
+                        cwd: repoDir,
+                        stdio: 'pipe',  // Changed from 'inherit' to capture output
+                        all: true
+                    }),
+                    900000,  // Increased to 15 minutes per comment
+                    'AI fixing timeout'
+                );
+
+                // Log AI output for debugging
+                if (aiResult.stdout) {
+                    logger.info(`\n📤 AI STDOUT:\n${aiResult.stdout.substring(0, 1000)}${aiResult.stdout.length > 1000 ? '...(truncated)' : ''}`);
+                }
+                if (aiResult.stderr) {
+                    logger.warn(`\n⚠️  AI STDERR:\n${aiResult.stderr.substring(0, 1000)}${aiResult.stderr.length > 1000 ? '...(truncated)' : ''}`);
+                }
+                if (aiResult.all) {
+                    logger.info(`\n📋 AI COMBINED OUTPUT:\n${aiResult.all.substring(0, 1000)}${aiResult.all.length > 1000 ? '...(truncated)' : ''}`);
+                }
+
+                // ATOMIC COMMIT: Commit changes for this specific comment
+                logger.info(`Committing changes for comment ${commentNum}...`);
+                await execa('git', ['add', '.'], { cwd: repoDir, stdio: 'inherit' });
+
+                const { stdout: status } = await execa('git', ['status', '--porcelain'], { cwd: repoDir });
+                if (status) {
+                    const commentType = comment.comment_type === 'inline' ? 'inline' : 'review';
+                    const fileInfo = comment.file_path ? ` (${comment.file_path}:${comment.line_number || '?'})` : '';
+                    const commitMsg = `fix: address ${commentType} comment ${commentNum}/${unprocessedComments.length}${fileInfo}
+
+${comment.comment_body.substring(0, 200)}${comment.comment_body.length > 200 ? '...' : ''}
+
+PR: #${pr.number}`;
+
+                    await execa('git', ['commit', '-m', commitMsg], { cwd: repoDir, stdio: 'inherit' });
+
+                    // Get commit hash for tracking
+                    const { stdout: commitHash } = await execa('git', ['rev-parse', 'HEAD'], { cwd: repoDir });
+                    commitHashes.push(commitHash.trim());
+
+                    logger.info(`✓ Comment ${commentNum} committed (${commitHash.trim().substring(0, 8)})`);
+                } else {
+                    logger.warn(`⚠️  Comment ${commentNum} processed but AI made no changes. Trying simplified prompt...`);
+
+                    // RETRY with simplified prompt
+                    const simplePrompt = `Fix this issue in the code:
+
+${comment.comment_body}
+
+${comment.file_path ? `File: ${comment.file_path}` : ''}
+
+Make the minimal change needed to address this feedback. Be direct and specific.`;
+
+                    try {
+                        const retryArgs = ['-p', simplePrompt];
+                        if (config.geminiYolo) {
+                            retryArgs.push('-y');
+                        }
+
+                        logger.info(`🔄 Retry attempt with simplified prompt...`);
+                        await withTimeout(
+                            () => execa('gemini', retryArgs, {
+                                cwd: repoDir,
+                                stdio: 'pipe',
+                                all: true
+                            }),
+                            600000,  // 10 minutes for retry
+                            'AI retry timeout'
+                        );
+
+                        // Check again for changes
+                        const { stdout: retryStatus } = await execa('git', ['status', '--porcelain'], { cwd: repoDir });
+                        if (retryStatus) {
+                            await execa('git', ['add', '.'], { cwd: repoDir, stdio: 'inherit' });
+                            const commitMsg = `fix: address comment ${commentNum} (retry with simplified prompt)
+
+${comment.comment_body.substring(0, 150)}...
+
+PR: #${pr.number}`;
+                            await execa('git', ['commit', '-m', commitMsg], { cwd: repoDir, stdio: 'inherit' });
+                            const { stdout: commitHash } = await execa('git', ['rev-parse', 'HEAD'], { cwd: repoDir });
+                            commitHashes.push(commitHash.trim());
+                            logger.info(`✓ Comment ${commentNum} fixed on retry (${commitHash.trim().substring(0, 8)})`);
+                        } else {
+                            logger.warn(`⚠️  Retry also produced no changes. Comment ${commentNum} needs manual review.`);
+                            failedCount++;
+                            // Don't mark as processed so it can be retried later
+                            continue;
+                        }
+                    } catch (retryError) {
+                        logger.error(`Retry failed for comment ${commentNum}: ${retryError.message}`);
+                        failedCount++;
+                        continue;
+                    }
+                }
+
+                // Mark this comment as processed in database
+                markCommentProcessed(comment.id);
+                processedCount++;
+                logger.info(`✓ Comment ${commentNum} processed successfully`);
+
+            } catch (error) {
+                logger.error(`✗ Failed to process comment ${commentNum}: ${error.message}`);
+                logger.error(`Error stack: ${error.stack}`);
+
+                // Log detailed error info
+                const errorDetails = {
+                    commentNum,
+                    commentId: comment.id,
+                    commentType: comment.comment_type,
+                    filePath: comment.file_path,
+                    errorMessage: error.message,
+                    errorType: error.name,
+                    timestamp: new Date().toISOString()
+                };
+
+                logger.error(`Error details: ${JSON.stringify(errorDetails, null, 2)}`);
+
+                failedCount++;
+                // Continue with next comment even if this one fails
+            }
         }
 
-        // Log the prompt being sent to AI
-        logger.info(`\n${'─'.repeat(80)}`);
-        logger.info(`🤖 SENDING PROMPT TO GEMINI CLI:`);
-        logger.info(`${'─'.repeat(80)}`);
-        logger.info(prompt);
-        logger.info(`${'─'.repeat(80)}`);
-        logger.info(`📋 Gemini CLI Args: ${JSON.stringify(geminiArgs.slice(0, 2))}${geminiArgs.length > 2 ? ' + additional flags' : ''}`);
-        logger.info(`${'─'.repeat(80)}\n`);
+        logger.info(`\n${'='.repeat(60)}`);
+        logger.info(`Processing complete: ${processedCount} succeeded, ${failedCount} failed`);
+        logger.info(`Total commits created: ${commitHashes.length}`);
+        logger.info(`Commit hashes: ${commitHashes.map(h => h.substring(0, 8)).join(', ')}`);
+        logger.info(`${'='.repeat(60)}\n`);
 
-        await withTimeout(
-            () => execa('gemini', geminiArgs, { cwd: repoDir, stdio: 'inherit' }),
-            600000,
-            'AI fixing timeout'
-        );
-
-        // === PHASE 4: Commit & Push ===
-        logger.info('Committing fixes...');
-        await execa('git', ['add', '.'], { cwd: repoDir, stdio: 'inherit' });
-
-        const { stdout: status } = await execa('git', ['status', '--porcelain'], { cwd: repoDir });
+        // === PHASE 4: Check if we have any commits to push ===
         const { stdout: ahead } = await execa('git', ['status', '-sb'], { cwd: repoDir });
 
-        if (!status && !ahead.includes('ahead')) {
-            logger.info('No changes were made by AI. Nothing to push.');
-            return false;
+        // Check for uncommitted changes
+        const { stdout: uncommittedStatus } = await execa('git', ['status', '--porcelain'], { cwd: repoDir });
+
+        // NEW LOGIC: Don't fail if we have ANY progress
+        const hasProgress = commitHashes.length > 0 || uncommittedStatus;
+        const allCommentsFailed = failedCount === unprocessedComments.length;
+
+        if (!ahead.includes('ahead') && !hasProgress) {
+            const errorMsg = `AI tidak membuat perubahan apapun setelah memproses ${unprocessedComments.length} comments. ` +
+                `Berhasil: ${processedCount}, Gagal: ${failedCount}. ` +
+                `Kemungkinan penyebab:\n` +
+                `1. AI tidak memahami feedback reviewer\n` +
+                `2. Comments terlalu kompleks/vague\n` +
+                `3. AI mengalami error saat processing\n` +
+                `4. Perubahan yang diminta sudah ada di code\n\n` +
+                `Solusi:\n` +
+                `- Cek logs di atas untuk melihat output AI\n` +
+                `- Coba retry dengan prompt yang lebih spesifik\n` +
+                `- Atau handle manual jika memang butuh human intervention`;
+
+            logger.warn(errorMsg);
+
+            // Only fail if ALL comments failed AND no progress at all
+            if (allCommentsFailed) {
+                updateTaskStatus(`PR-${pr.number}`, 'failed', {
+                    errorMessage: errorMsg
+                });
+                return false;
+            }
         }
 
-        if (status) {
-            await execa('git', ['commit', '-m', `fix: address reviewer comments in PR #${pr.number}`], { cwd: repoDir, stdio: 'inherit' });
+        // If there are uncommitted changes, commit them
+        if (uncommittedStatus) {
+            logger.info('Found uncommitted changes. Creating final commit...');
+            await execa('git', ['add', '.'], { cwd: repoDir, stdio: 'inherit' });
+            await execa('git', ['commit', '-m', `fix: remaining changes from AI processing\n\nPR: #${pr.number}`], { cwd: repoDir, stdio: 'inherit' });
+            const { stdout: commitHash } = await execa('git', ['rev-parse', 'HEAD'], { cwd: repoDir });
+            commitHashes.push(commitHash.trim());
+        }
+
+        // If we have some commits but also failures, warn about partial completion
+        if (failedCount > 0 && commitHashes.length > 0) {
+            logger.warn(`⚠️  Partial completion: ${processedCount} comments fixed, ${failedCount} failed. Pushing partial changes...`);
         }
 
         // === PHASE 5: Testing ===
@@ -475,9 +665,41 @@ Please implement the requested changes and modify the files directly in the work
         });
 
         await retryGitHubAPI(async () => {
+            let commentBody = `Halo Kang @${config.reviewerHandle}, revisinya udah beres ya! 🚀\n\n`;
+
+            if (failedCount > 0) {
+                commentBody += `⚠️  **Status: Partial Completion**\n\n`;
+                commentBody += `📊 **Summary:**\n`;
+                commentBody += `- ✅ Berhasil diperbaiki: ${processedCount} comments\n`;
+                commentBody += `- ❌ Perlu manual review: ${failedCount} comments\n`;
+                commentBody += `- 📝 Total commits: ${commitHashes.length}\n\n`;
+
+                if (processedCount > 0) {
+                    commentBody += `Yang udah diperbaiki silakan dicek dulu ya Kang. `;
+                    commentBody += `Untuk yang gagal, kemungkinan:\n`;
+                    commentBody += `- Terlalu kompleks untuk AI handle otomatis\n`;
+                    commentBody += `- Butuh context atau keputusan arsitektur\n`;
+                    commentBody += `- Atau memang udah bener tapi AI bingung �\n\n`;
+                    commentBody += `Bisa di-retry lagi atau aku handle manual ya Kang. Makasih! 🙏\n`;
+                } else {
+                    commentBody += `Maaf Kang, AI belum bisa handle comments-nya secara otomatis. `;
+                    commentBody += `Sepertinya butuh manual intervention atau prompt yang lebih spesifik. `;
+                    commentBody += `Aku coba handle manual ya atau bisa kasih guidance lebih detail. 🙏\n`;
+                }
+            } else {
+                commentBody += `✅ **Status: All Comments Addressed**\n\n`;
+                commentBody += `Total ada ${processedCount} masukan yang udah aku perbaikin. `;
+                commentBody += `Sengaja aku bikin jadi ${commitHashes.length} commit terpisah biar akangnya ngereview lebih enak dan gampang ditrack.\n\n`;
+                commentBody += `Monggo dicek lagi ya update commit terbarunya. Makasih Kang! 🙏\n`;
+            }
+
+            if (commitHashes.length > 0) {
+                commentBody += `\n📝 **Commits:** ${commitHashes.map(h => h.substring(0, 8)).join(', ')}`;
+            }
+
             await execa('gh', [
                 'pr', 'comment', pr.number.toString(),
-                '--body', `✅ Automated fix applied. I've addressed the review comments and re-requested your review @${config.reviewerHandle}. Please check the latest commits!`,
+                '--body', commentBody,
                 '--repo', repoName
             ], { cwd: repoDir, stdio: 'inherit' });
         }, 'comment on PR');
@@ -492,8 +714,25 @@ Please implement the requested changes and modify the files directly in the work
             url: pr.url,
         });
 
-        logger.info(`✅ Successfully updated PR #${pr.number}`);
-        notifyTaskDone(`PR-${pr.number}`, `PR Fix completed.`);
+        // Update task status with appropriate message
+        if (failedCount > 0 && processedCount > 0) {
+            // Partial success - mark as done but with warning
+            updateTaskStatus(`PR-${pr.number}`, 'done', {
+                errorMessage: `Partial completion: ${processedCount} comments fixed, ${failedCount} need manual review`
+            });
+            logger.info(`⚠️  Partial success: PR #${pr.number} - ${processedCount} fixed, ${failedCount} need manual review`);
+        } else if (failedCount > 0) {
+            // All failed but we're not marking as failed (has some progress)
+            updateTaskStatus(`PR-${pr.number}`, 'done', {
+                errorMessage: `Completed with issues: ${failedCount} comments need manual review`
+            });
+            logger.info(`⚠️  Completed with issues: PR #${pr.number} - ${failedCount} comments need manual review`);
+        } else {
+            // Full success
+            logger.info(`✅ Successfully updated PR #${pr.number} - all ${processedCount} comments addressed`);
+        }
+
+        notifyTaskDone(`PR-${pr.number}`, `PR Fix completed: ${processedCount} fixed, ${failedCount} need manual review`);
         return true;
 
     } catch (error) {

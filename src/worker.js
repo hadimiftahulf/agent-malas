@@ -151,7 +151,7 @@ export async function processTask(task) {
     const prArgs = [
       'pr', 'create',
       '--title', `feat: ${task.title} (${task.id})`,
-      '--body', `Automated PR for task ${task.id}.\n\nDescription:\n${task.description}\n\nCloses #${task.id}`,
+      '--body', `Halo Kang @${config.reviewerHandle}, PR untuk task ${task.id} udah aku buatin ya.\n\n**Deskripsi:**\n${task.description}\n\nMonggo dicek dan direview ya Kang. Makasih! 🙏\n\nCloses #${task.id}`,
       '--reviewer', config.reviewerHandle,
       '--base', baseBranch,
       '--repo', repoName
@@ -209,8 +209,9 @@ export async function processRejectedPR(pr) {
 
   if (config.dryRun) {
     logger.info(`[DRY RUN] Would checkout PR branch ${branchName}`);
-    logger.info(`[DRY RUN] Would process ${pr.unprocessedComments?.length || 0} comments one by one`);
-    logger.info(`[DRY RUN] Would commit, push, and comment on PR #${pr.number} to request re-review`);
+    logger.info(`[DRY RUN] Would process ${pr.unprocessedComments?.length || 0} comments one by one with atomic commits`);
+    logger.info(`[DRY RUN] Would create ${pr.unprocessedComments?.length || 0} individual commits, then push all at once`);
+    logger.info(`[DRY RUN] Would comment on PR #${pr.number} to request re-review`);
     return;
   }
 
@@ -238,10 +239,11 @@ export async function processRejectedPR(pr) {
     // 3. Load instructions once
     const instructions = await fs.readFile('agents.md', 'utf-8');
 
-    // 4. Process each unprocessed comment one by one
+    // 4. Process each unprocessed comment one by one with atomic commits
     const unprocessedComments = pr.unprocessedComments || [];
     let processedCount = 0;
     let failedCount = 0;
+    const commitHashes = []; // Track commits for potential rollback
 
     for (let i = 0; i < unprocessedComments.length; i++) {
       const comment = unprocessedComments[i];
@@ -298,6 +300,31 @@ Focus ONLY on addressing this particular comment. Be precise and minimal in your
         logger.info(`Calling AI to fix comment ${commentNum}...`);
         await execa('gemini', geminiArgs, { cwd: repoDir, stdio: 'inherit' });
 
+        // ATOMIC COMMIT: Commit changes for this specific comment
+        logger.info(`Committing changes for comment ${commentNum}...`);
+        await execa('git', ['add', '.'], { cwd: repoDir, stdio: 'inherit' });
+
+        const { stdout: status } = await execa('git', ['status', '--porcelain'], { cwd: repoDir });
+        if (status) {
+          const commentType = comment.comment_type === 'inline' ? 'inline' : 'review';
+          const fileInfo = comment.file_path ? ` (${comment.file_path}:${comment.line_number || '?'})` : '';
+          const commitMsg = `fix: address ${commentType} comment ${commentNum}/${unprocessedComments.length}${fileInfo}
+
+${comment.comment_body.substring(0, 200)}${comment.comment_body.length > 200 ? '...' : ''}
+
+PR: #${pr.number}`;
+
+          await execa('git', ['commit', '-m', commitMsg], { cwd: repoDir, stdio: 'inherit' });
+
+          // Get commit hash for tracking
+          const { stdout: commitHash } = await execa('git', ['rev-parse', 'HEAD'], { cwd: repoDir });
+          commitHashes.push(commitHash.trim());
+
+          logger.info(`✓ Comment ${commentNum} committed (${commitHash.trim().substring(0, 8)})`);
+        } else {
+          logger.info(`ℹ Comment ${commentNum} processed but no changes to commit`);
+        }
+
         // Mark this comment as processed in database
         markCommentProcessed(comment.id);
         processedCount++;
@@ -312,24 +339,15 @@ Focus ONLY on addressing this particular comment. Be precise and minimal in your
 
     logger.info(`\n${'='.repeat(60)}`);
     logger.info(`Processing complete: ${processedCount} succeeded, ${failedCount} failed`);
+    logger.info(`Total commits created: ${commitHashes.length}`);
+    logger.info(`Commit hashes: ${commitHashes.map(h => h.substring(0, 8)).join(', ')}`);
     logger.info(`${'='.repeat(60)}\n`);
 
-    // 5. After all comments processed, commit and push once
-    logger.info('Committing all fixes...');
-    await execa('git', ['add', '.'], { cwd: repoDir, stdio: 'inherit' });
-
-    const { stdout: status } = await execa('git', ['status', '--porcelain'], { cwd: repoDir });
+    // 5. Check if we have any commits to push
     const { stdout: ahead } = await execa('git', ['status', '-sb'], { cwd: repoDir });
-
-    // Proceed if there are uncommitted changes OR if branch is ahead of origin (already committed)
-    if (!status && !ahead.includes('ahead')) {
+    if (!ahead.includes('ahead') && commitHashes.length === 0) {
       logger.info('No changes were made by AI. Nothing to push.');
       return false;
-    }
-
-    if (status) {
-      const commitMsg = `fix: address ${processedCount} reviewer comment${processedCount !== 1 ? 's' : ''} in PR #${pr.number}`;
-      await execa('git', ['commit', '-m', commitMsg], { cwd: repoDir, stdio: 'inherit' });
     }
 
     // 6. Pre-PR Verification
@@ -356,7 +374,12 @@ Focus ONLY on addressing this particular comment. Be precise and minimal in your
       logger.warn(`Failed to re-request review: ${e.message}`);
     });
 
-    const commentBody = `✅ Automated fix applied. I've addressed ${processedCount} review comment${processedCount !== 1 ? 's' : ''} and re-requested your review @${config.reviewerHandle}. Please check the latest commits!`;
+    const commentBody = `Halo Kang @${config.reviewerHandle}, revisinya udah beres ya! 🚀
+Total ada ${processedCount} masukan yang udah aku perbaikin. Sengaja aku bikin jadi ${commitHashes.length} commit terpisah biar akangnya ngereview lebih enak dan gampang ditrack.
+
+Monggo dicek lagi ya update commit terbarunya. Makasih Kang! 🙏
+
+📝 Commits: ${commitHashes.map(h => h.substring(0, 8)).join(', ')}`;
     await execa('gh', [
       'pr', 'comment', pr.number.toString(),
       '--body', commentBody,

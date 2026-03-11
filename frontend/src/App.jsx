@@ -7,6 +7,7 @@ import { PRTracker } from './components/PRTracker';
 import { AgentControl } from './components/AgentControl';
 import { LiveTerminal } from './components/LiveTerminal';
 import { MetricsChart } from './components/MetricsChart';
+import ApprovalNotifications from './components/ApprovalNotifications';
 import { useApi } from './hooks/useApi';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useNotification } from './hooks/useNotification';
@@ -16,6 +17,7 @@ const pages = {
   dashboard: DashboardStats,
   tasks: TaskQueue,
   prs: PRTracker,
+  approvals: ApprovalNotifications,
   settings: AgentControl,
   logs: LiveTerminal,
   metrics: MetricsChart,
@@ -43,6 +45,11 @@ export default function App() {
       addToast(`Task #${data?.taskId} gagal: ${data?.error || 'error'}`, 'error');
     } else if (type === 'task:start') {
       addToast(`Mulai mengerjakan Task #${data?.taskId}`, 'info');
+    } else if (type === 'approval:request') {
+      addToast(`🔔 New approval required: ${data?.title}`, 'info');
+    } else if (type === 'approval:response') {
+      const status = data?.status === 'approved' ? '✅ Approved' : '❌ Rejected';
+      addToast(`${status}: ${data?.task?.title}`, data?.status === 'approved' ? 'success' : 'error');
     }
   }, [ws.lastEvent, addToast]);
 
@@ -90,7 +97,7 @@ export default function App() {
       {/* Main Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen relative">
 
-        <Header health={health} onMenuToggle={() => setSidebarOpen(true)} />
+        <Header health={health} onMenuToggle={() => setSidebarOpen(true)} onNavigate={setActivePage} />
 
         {/* Content Panel */}
         <main className="flex-1 overflow-y-auto scroll-smooth p-6 md:p-8 lg:p-10">

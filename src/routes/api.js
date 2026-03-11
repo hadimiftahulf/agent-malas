@@ -7,8 +7,14 @@ import {
   getAllPRComments, getPRCommentStats
 } from '../db.js';
 import { getAgentState } from '../agent-state.js';
+import approvalRouter from './approval.js';
+import mobileRouter from './mobile.js';
 
 export const apiRouter = Router();
+
+// Mount sub-routers
+apiRouter.use('/approval', approvalRouter);
+apiRouter.use('/mobile', mobileRouter);
 
 const startTime = Date.now();
 
@@ -333,4 +339,63 @@ apiRouter.post('/queue/:id/priority', (req, res) => {
   // This would require a priority field in the database
   // For now, just return success
   res.json({ success: true, message: 'Task prioritized (not implemented yet)' });
+});
+
+// ─── POST /api/tasks/:id/retry ───────────────────────────
+
+apiRouter.post('/tasks/:id/retry', async (req, res) => {
+  try {
+    const { updateTaskStatus } = await import('../db.js');
+    const taskId = req.params.id;
+
+    // Get task to verify it exists and is failed
+    const task = getTask(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    if (task.status !== 'failed') {
+      return res.status(400).json({ error: `Task is not in failed status (current: ${task.status})` });
+    }
+
+    // Reset task to pending status
+    updateTaskStatus(taskId, 'pending');
+
+    res.json({
+      success: true,
+      message: `Task ${taskId} has been reset to pending and will be retried`,
+      task: {
+        id: taskId,
+        title: task.title,
+        status: 'pending'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── POST /api/tasks/retry-all-failed ────────────────────
+
+apiRouter.post('/tasks/retry-all-failed', async (req, res) => {
+  try {
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database('data/agent-malas.db');
+
+    const result = db.prepare(`
+      UPDATE tasks 
+      SET status = 'pending'
+      WHERE status = 'failed'
+    `).run();
+
+    db.close();
+
+    res.json({
+      success: true,
+      message: `${result.changes} failed tasks have been reset to pending`,
+      count: result.changes
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });

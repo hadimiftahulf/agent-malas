@@ -4,10 +4,11 @@ import { fetchReadyTasks } from './github-project.js';
 import { fetchRejectedPRs } from './github-pr.js';
 import { processTask, processRejectedPR } from './worker.js';
 import { sendDailyStandup } from './report.js';
-import { initDb, insertTask, upsertQueuedTask, updateTaskStatus, insertPR, incrementMetric } from './db.js';
+import { initDb, upsertQueuedTask, updateTaskStatus, insertPR, incrementMetric, getTask } from './db.js';
 import { startServer } from './server.js';
 import { setupWebSocket, broadcast } from './websocket.js';
 import { setAgentStatus, setCurrentTask, setLastRun } from './agent-state.js';
+import { requestTaskApproval, isTaskApproved, isTaskRejected } from './approval-helper.js';
 import fs from 'fs-extra';
 
 const metrics = { tasksCompleted: 0, prsRevised: 0 };
@@ -66,6 +67,53 @@ async function run(once = false) {
 
     // Pick the first task to process
     const task = tasks[0];
+    const taskId = String(task.id);
+
+    // Check if task needs approval
+    const taskFromDb = getTask(taskId);
+
+    // If task is new or pending approval, request approval
+    if (!taskFromDb || taskFromDb.approval_status === 'pending') {
+      logger.info(`Task ${taskId} requires approval: ${task.title}`);
+
+      // Request approval (will broadcast to frontend)
+      requestTaskApproval(
+        taskId,
+        'issue',
+        `New Task: ${task.title}`,
+        `Repository: ${task.repo}\n\n${task.description || 'No description'}`
+      );
+
+      logger.info(`Waiting for approval for task ${taskId}...`);
+      setAgentStatus('waiting_approval');
+      broadcast('agent:status', { status: 'waiting_approval', taskId });
+      setLastRun(new Date().toISOString());
+      return; // Exit and wait for approval
+    }
+
+    // Check if task was rejected
+    if (isTaskRejected(taskId)) {
+      logger.info(`Task ${taskId} was rejected. Skipping...`);
+      updateTaskStatus(taskId, 'skipped', {
+        errorMessage: `Rejected by ${taskFromDb.approved_by}: ${taskFromDb.rejection_reason || 'No reason provided'}`
+      });
+      setAgentStatus('idle');
+      broadcast('agent:status', { status: 'idle' });
+      setLastRun(new Date().toISOString());
+      return;
+    }
+
+    // Check if task is approved
+    if (!isTaskApproved(taskId)) {
+      logger.info(`Task ${taskId} is not yet approved. Waiting...`);
+      setAgentStatus('waiting_approval');
+      broadcast('agent:status', { status: 'waiting_approval', taskId });
+      setLastRun(new Date().toISOString());
+      return;
+    }
+
+    // Task is approved, proceed with execution
+    logger.info(`Task ${taskId} is approved. Processing...`);
     logger.info(`Dequeuing task: ${task.title}`);
     setCurrentTask(task.title);
     setAgentStatus('processing');
@@ -73,17 +121,17 @@ async function run(once = false) {
     broadcast('queue:update', { tasks: tasks.map(t => ({ id: t.id, title: t.title, repo: t.repo })) });
 
     // Mark the active task as 'processing'
-    updateTaskStatus(String(task.id), 'processing');
+    updateTaskStatus(taskId, 'processing');
 
     const success = await processTask(task);
 
     if (success) {
       metrics.tasksCompleted++;
-      updateTaskStatus(String(task.id), 'done');
+      updateTaskStatus(taskId, 'done');
       incrementMetric('tasks_completed');
       incrementMetric('prs_created');
     } else {
-      updateTaskStatus(String(task.id), 'failed', {
+      updateTaskStatus(taskId, 'failed', {
         errorMessage: 'Task processing returned false',
       });
       incrementMetric('tasks_failed');
@@ -119,13 +167,81 @@ async function run(once = false) {
     }
 
     const pr = rejectedPRs[0];
+    const prTaskId = `PR-${pr.number}`;
+
+    // Create or get task for this PR
+    upsertQueuedTask({
+      id: prTaskId,
+      title: `Fix PR #${pr.number}: ${pr.title}`,
+      description: `Rejected PR with ${pr.unprocessedComments?.length || 0} comments to address`,
+      repo: pr.repository?.nameWithOwner || pr.repo || 'unknown/repo',
+      projectName: 'PR Fixes',
+    });
+
+    const taskFromDb = getTask(prTaskId);
+
+    // If PR fix needs approval
+    if (!taskFromDb || taskFromDb.approval_status === 'pending') {
+      logger.info(`PR #${pr.number} fix requires approval`);
+
+      // Build comment summary
+      const commentSummary = pr.unprocessedComments?.slice(0, 3).map((c, i) =>
+        `${i + 1}. [${c.comment_type}] ${c.comment_body.substring(0, 100)}...`
+      ).join('\n') || 'No comments';
+
+      const totalComments = pr.unprocessedComments?.length || 0;
+      const moreText = totalComments > 3 ? `\n... and ${totalComments - 3} more comments` : '';
+
+      requestTaskApproval(
+        prTaskId,
+        'pr_rejected',
+        `Fix Rejected PR #${pr.number}`,
+        `Repository: ${pr.repository?.nameWithOwner || pr.repo}\nPR: ${pr.title}\n\nComments to address (${totalComments}):\n${commentSummary}${moreText}`
+      );
+
+      logger.info(`Waiting for approval for PR #${pr.number}...`);
+      setAgentStatus('waiting_approval');
+      broadcast('agent:status', { status: 'waiting_approval', taskId: prTaskId });
+      setLastRun(new Date().toISOString());
+      return;
+    }
+
+    // Check if rejected
+    if (isTaskRejected(prTaskId)) {
+      logger.info(`PR #${pr.number} fix was rejected. Skipping...`);
+      updateTaskStatus(prTaskId, 'skipped', {
+        errorMessage: `Rejected by ${taskFromDb.approved_by}: ${taskFromDb.rejection_reason || 'No reason provided'}`
+      });
+      setAgentStatus('idle');
+      broadcast('agent:status', { status: 'idle' });
+      setLastRun(new Date().toISOString());
+      return;
+    }
+
+    // Check if approved
+    if (!isTaskApproved(prTaskId)) {
+      logger.info(`PR #${pr.number} fix is not yet approved. Waiting...`);
+      setAgentStatus('waiting_approval');
+      broadcast('agent:status', { status: 'waiting_approval', taskId: prTaskId });
+      setLastRun(new Date().toISOString());
+      return;
+    }
+
+    // Approved, proceed with fixing
+    logger.info(`PR #${pr.number} fix is approved. Processing...`);
     logger.info(`Dequeuing rejected PR: #${pr.number}`);
     setCurrentTask(`Fix PR #${pr.number}`);
+    updateTaskStatus(prTaskId, 'processing');
 
     const success = await processRejectedPR(pr);
     if (success) {
       metrics.prsRevised++;
       incrementMetric('prs_revised');
+      updateTaskStatus(prTaskId, 'done');
+    } else {
+      updateTaskStatus(prTaskId, 'failed', {
+        errorMessage: 'PR fix processing returned false'
+      });
     }
     setCurrentTask(null);
   }

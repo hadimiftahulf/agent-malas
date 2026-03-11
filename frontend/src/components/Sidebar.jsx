@@ -1,8 +1,9 @@
-import { LayoutDashboard, ListTodo, GitPullRequestDraft, Settings, TerminalSquare, X, Zap, ChevronsLeft, ChevronsRight, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, ListTodo, GitPullRequestDraft, Settings, TerminalSquare, X, Zap, ChevronsLeft, ChevronsRight, TrendingUp, CheckCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const menuItems = [
   { id: 'dashboard', icon: LayoutDashboard, label: 'Overview' },
+  { id: 'approvals', icon: CheckCircle, label: 'Approvals' },
   { id: 'tasks', icon: ListTodo, label: 'Task Queue' },
   { id: 'prs', icon: GitPullRequestDraft, label: 'Pull Requests' },
   { id: 'metrics', icon: TrendingUp, label: 'Analytics' },

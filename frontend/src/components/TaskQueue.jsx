@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
-import { Search, Filter, Github, Clock, Coffee, Sparkles, ListChecks } from 'lucide-react';
+import { Search, Filter, Github, Clock, Coffee, Sparkles, ListChecks, RotateCw, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useToast } from '../hooks/useToast';
 
 const statusBadge = {
   queued: { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', label: 'Queued', dot: 'bg-slate-400' },
@@ -9,6 +10,7 @@ const statusBadge = {
   done: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', label: 'Done', dot: 'bg-emerald-500' },
   failed: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', label: 'Failed', dot: 'bg-rose-500' },
   skipped: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', label: 'Skipped', dot: 'bg-amber-400' },
+  pending: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', label: 'Pending', dot: 'bg-blue-400' },
 };
 
 function relativeTime(iso) {
@@ -22,43 +24,101 @@ function relativeTime(iso) {
   return `${Math.floor(hrs / 24)}d`;
 }
 
-function TaskItem({ task, index }) {
+function TaskItem({ task, index, onRetry }) {
   const badge = statusBadge[task.status] || statusBadge.queued;
+  const [retrying, setRetrying] = useState(false);
+  const [showError, setShowError] = useState(false);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    await onRetry(task.id);
+    setRetrying(false);
+  };
 
   return (
-    <div 
-      className="premium-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+    <div
+      className="premium-card p-5 flex flex-col gap-4 group"
       style={{ animationDelay: `${index * 50}ms` }}
     >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2.5 flex-wrap mb-2.5">
-          <span className="text-slate-400 bg-slate-50 px-2.5 py-1 text-[11px] rounded-lg border border-slate-200/80 font-mono font-bold tracking-tight">#{task.id}</span>
-          <h3 className="text-[14px] font-bold text-slate-800 tracking-tight truncate group-hover:text-indigo-600 transition-colors">
-            {task.title}
-          </h3>
-        </div>
-        
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {task.repo && (
-            <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
-              <Github size={12} className="text-slate-400" />
-              {task.repo}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap mb-2.5">
+            <span className="text-slate-400 bg-slate-50 px-2.5 py-1 text-[11px] rounded-lg border border-slate-200/80 font-mono font-bold tracking-tight">#{task.id}</span>
+            <h3 className="text-[14px] font-bold text-slate-800 tracking-tight truncate group-hover:text-indigo-600 transition-colors">
+              {task.title}
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {task.repo && (
+              <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                <Github size={12} className="text-slate-400" />
+                {task.repo}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-400">
+              <Clock size={12} className="text-slate-300" />
+              {relativeTime(task.created_at)}
             </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {task.status === 'failed' && task.error_message && (
+            <button
+              onClick={() => setShowError(!showError)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all",
+                "bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 hover:border-rose-300"
+              )}
+              title="Show error details"
+            >
+              <AlertCircle size={12} />
+              Error
+              {showError ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
           )}
-          <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-400">
-            <Clock size={12} className="text-slate-300" />
-            {relativeTime(task.created_at)}
+
+          {task.status === 'failed' && (
+            <button
+              onClick={handleRetry}
+              disabled={retrying}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all",
+                "bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+              title="Retry this task"
+            >
+              <RotateCw size={12} className={retrying ? "animate-spin" : ""} />
+              Retry
+            </button>
+          )}
+
+          <div className={cn(
+            "flex items-center gap-2 px-3.5 py-2 rounded-xl border shrink-0 text-[10px] font-bold uppercase tracking-wider transition-all",
+            badge.bg, badge.border, badge.text
+          )}>
+            <span className={cn("w-2 h-2 rounded-full", badge.dot)} />
+            {badge.label}
           </div>
         </div>
       </div>
 
-      <div className={cn(
-        "flex items-center gap-2 px-3.5 py-2 rounded-xl border shrink-0 text-[10px] font-bold uppercase tracking-wider transition-all",
-        badge.bg, badge.border, badge.text
-      )}>
-        <span className={cn("w-2 h-2 rounded-full", badge.dot)} />
-        {badge.label}
-      </div>
+      {/* Error Details Panel */}
+      {task.status === 'failed' && task.error_message && showError && (
+        <div className="mt-2 p-4 bg-rose-50 border border-rose-200 rounded-xl">
+          <div className="flex items-start gap-2">
+            <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <h4 className="text-[12px] font-bold text-rose-700 mb-2">Error Details</h4>
+              <p className="text-[13px] text-rose-600 leading-relaxed whitespace-pre-wrap break-words">
+                {task.error_message}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -67,12 +127,34 @@ export function TaskQueue() {
   const [tab, setTab] = useState('history');
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
+  const { showToast } = useToast();
 
-  const { data: queueData, loading: queueLoading } = useApi('/api/queue', { interval: 15000 });
-  const { data: historyData, loading: historyLoading } = useApi('/api/tasks', {
+  const { data: queueData, loading: queueLoading, refetch: refetchQueue } = useApi('/api/queue', { interval: 15000 });
+  const { data: historyData, loading: historyLoading, refetch: refetchHistory } = useApi('/api/tasks', {
     interval: 30000,
     params: { limit: 50, ...(statusFilter && { status: statusFilter }) },
   });
+
+  const handleRetry = async (taskId) => {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/retry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('success', `Task ${taskId} has been queued for retry`);
+        refetchHistory();
+        refetchQueue();
+      } else {
+        showToast('error', data.error || 'Failed to retry task');
+      }
+    } catch (error) {
+      showToast('error', 'Failed to retry task: ' + error.message);
+    }
+  };
 
   const queueTasks = queueData || [];
   const historyTasks = historyData?.data || [];
@@ -129,12 +211,12 @@ export function TaskQueue() {
             className="w-full pl-10 pr-4 py-2.5 text-[14px] font-medium bg-slate-50 text-slate-800 placeholder-slate-400 rounded-xl border border-slate-200/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 transition-all"
           />
         </div>
-        
+
         {tab === 'history' && (
           <>
             <div className="w-px h-8 bg-slate-200 hidden sm:block self-center" />
             <div className="relative w-full sm:w-48 shrink-0">
-               <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -156,7 +238,7 @@ export function TaskQueue() {
       <div className="space-y-3">
         {isLoading && !filtered.length ? (
           Array.from({ length: 4 }).map((_, i) => (
-             <div key={i} className="rounded-2xl h-[96px] animate-pulse bg-white border border-slate-100 shadow-sm" />
+            <div key={i} className="rounded-2xl h-[96px] animate-pulse bg-white border border-slate-100 shadow-sm" />
           ))
         ) : filtered.length === 0 ? (
           <div className="premium-card p-16 text-center flex flex-col items-center justify-center min-h-[300px]">
@@ -172,7 +254,7 @@ export function TaskQueue() {
           </div>
         ) : (
           <div className="space-y-3">
-             {filtered.map((task, i) => <TaskItem key={task.id} task={task} index={i} />)}
+            {filtered.map((task, i) => <TaskItem key={task.id} task={task} index={i} onRetry={handleRetry} />)}
           </div>
         )}
       </div>

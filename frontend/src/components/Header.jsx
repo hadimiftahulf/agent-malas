@@ -1,5 +1,6 @@
 import { Menu, Activity, Clock, Cpu, Bell } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useApprovalNotifications } from '../hooks/useApprovalNotifications';
 
 const statusConfig = {
   running: { bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Running', dot: '16, 185, 129', dotClass: 'bg-emerald-500' },
@@ -24,13 +25,14 @@ function formatTime(iso) {
   return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-export function Header({ health, onMenuToggle }) {
+export function Header({ health, onMenuToggle, onNavigate }) {
   const status = statusConfig[health?.agent] || statusConfig.stopped;
   const isPulsing = health?.agent === 'running' || health?.agent === 'processing';
+  const { pendingCount } = useApprovalNotifications();
 
   return (
     <header className="sticky top-0 z-40 shrink-0 h-[68px] glass-panel border-b border-slate-200/60 flex items-center justify-between px-5 sm:px-8 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-      
+
       {/* Left: Mobile Menu + Breadcrumb area */}
       <div className="flex items-center gap-4">
         <button
@@ -43,18 +45,18 @@ export function Header({ health, onMenuToggle }) {
 
       {/* Right: Status + Metrics + Actions */}
       <div className="flex items-center gap-3 ml-auto">
-        
+
         {/* Status Badge */}
         <div className={cn(
           "flex items-center gap-2 px-3.5 py-2 rounded-xl border text-[11px] font-bold tracking-wide uppercase transition-all",
           status.bg
         )}>
-          <div 
+          <div
             className={cn(
               "w-2 h-2 rounded-full",
               status.dotClass,
               isPulsing && "status-dot-animated"
-            )} 
+            )}
             style={{ '--pulse-rgb': status.dot }}
           />
           <span>{status.label}</span>
@@ -82,10 +84,21 @@ export function Header({ health, onMenuToggle }) {
           Node Runtime
         </div>
 
-        {/* Notification Bell */}
-        <button className="relative p-2.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all active:scale-95">
+        {/* Notification Bell with Badge */}
+        <button
+          onClick={() => onNavigate && onNavigate('approvals')}
+          className="relative p-2.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all active:scale-95"
+          title={`${pendingCount} pending approval${pendingCount !== 1 ? 's' : ''}`}
+        >
           <Bell size={18} />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-indigo-500 rounded-full border-2 border-white"></span>
+          {pendingCount > 0 && (
+            <>
+              <span className="absolute top-2 right-2 w-2 h-2 bg-indigo-500 rounded-full border-2 border-white animate-pulse"></span>
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center bg-indigo-600 text-white text-[10px] font-bold rounded-full border-2 border-white">
+                {pendingCount > 9 ? '9+' : pendingCount}
+              </span>
+            </>
+          )}
         </button>
       </div>
     </header>
